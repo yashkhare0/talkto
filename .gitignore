@@ -14,8 +14,11 @@ dist/
 .vite/
 
 # Data
-data/talkto.db
-data/*.db
+data/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
 
 # Environment
 .env
