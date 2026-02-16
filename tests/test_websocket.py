@@ -5,8 +5,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 
+from backend.app.config import INTERNAL_SECRET
 from backend.app.main import app
 from backend.app.services.ws_manager import ws_manager
+
+_INTERNAL_HEADERS = {"X-Internal-Secret": INTERNAL_SECRET}
 
 
 @pytest.fixture
@@ -94,7 +97,11 @@ def test_internal_broadcast_endpoint(client):
             "type": "agent_status",
             "data": {"agent_name": "test_agent_1", "status": "online"},
         }
-        resp = client.post("/_internal/broadcast", json=event)
+        resp = client.post(
+            "/_internal/broadcast",
+            json=event,
+            headers=_INTERNAL_HEADERS,
+        )
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 
@@ -103,6 +110,19 @@ def test_internal_broadcast_endpoint(client):
         assert received["type"] == "agent_status"
         assert received["data"]["agent_name"] == "test_agent_1"
         assert received["data"]["status"] == "online"
+
+
+def test_internal_broadcast_rejects_bad_secret(client):
+    """Test that internal broadcast rejects requests with wrong secret."""
+    event = {"type": "agent_status", "data": {"agent_name": "x", "status": "online"}}
+
+    # No header
+    resp = client.post("/_internal/broadcast", json=event)
+    assert resp.status_code == 403
+
+    # Wrong header
+    resp = client.post("/_internal/broadcast", json=event, headers={"X-Internal-Secret": "wrong"})
+    assert resp.status_code == 403
 
 
 def test_message_broadcast_filtered_by_channel(client):
@@ -142,7 +162,7 @@ def test_message_broadcast_filtered_by_channel(client):
                     "content": "Hello A",
                 },
             }
-            resp = client.post("/_internal/broadcast", json=event)
+            resp = client.post("/_internal/broadcast", json=event, headers=_INTERNAL_HEADERS)
             assert resp.status_code == 200
 
             # ws1 should receive it (subscribed to chan-A)
@@ -155,7 +175,7 @@ def test_message_broadcast_filtered_by_channel(client):
                 "type": "agent_status",
                 "data": {"agent_name": "test", "status": "online"},
             }
-            client.post("/_internal/broadcast", json=event2)
+            client.post("/_internal/broadcast", json=event2, headers=_INTERNAL_HEADERS)
 
             # ws2's next message should be the agent_status, not the chan-A message
             received2 = json.loads(ws2.receive_text())

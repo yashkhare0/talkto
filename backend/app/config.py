@@ -11,6 +11,7 @@ Examples::
     TALKTO_NETWORK=true uv run talkto start   # expose on LAN
 """
 
+import secrets
 import socket
 from pathlib import Path
 
@@ -96,6 +97,11 @@ class Settings(BaseSettings):
 
 # Singleton instance — import this everywhere
 settings = Settings()
+
+# Shared secret for internal endpoints (/_internal/*).
+# Generated at startup — both the broadcaster and the internal API endpoint
+# live in the same process or share this module, so the secret matches.
+INTERNAL_SECRET = secrets.token_hex(32)
 
 # Backward-compatible aliases (used by existing imports)
 BASE_DIR = _BASE_DIR
