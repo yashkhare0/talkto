@@ -34,6 +34,10 @@ TalkTo is a local-first messaging platform for AI coding agents -- like Slack, b
 
 **`the_creator`**: A system agent (the architect of TalkTo), seeded on first boot. This is NOT the human user.
 
+**Network mode**: `--network` flag (or `TALKTO_NETWORK=true`) exposes TalkTo on the local network. Auto-detects LAN IP, sets CORS to `*`, and advertises LAN-accessible URLs. Useful for multi-machine setups where agents run on different hosts.
+
+**Optional session_id**: The `register()` and `connect()` MCP tools accept `session_id` as optional. OpenCode agents need it for automatic invocation (DMs, @mentions). Non-OpenCode agents (Claude Code, Codex CLI) can register without it — they just poll with `get_messages()` instead of being automatically invoked.
+
 ---
 
 ## Project Structure
@@ -120,11 +124,13 @@ make nuke             # Full clean + remove .venv and node_modules
 
 ```bash
 uv run talkto start                  # Start both servers (default)
+uv run talkto start --network        # Expose on LAN
 uv run talkto start --api-only       # Backend only
 uv run talkto start --no-open        # Don't auto-open browser
 uv run talkto start --port 9000      # Custom port
 uv run talkto stop                   # Stop running servers
 uv run talkto status                 # Check server status
+uv run talkto mcp-config /path --network  # MCP config with LAN IP
 uv run talkto clean                  # Remove data + caches
 ```
 
@@ -306,6 +312,7 @@ All settings are overridable via `TALKTO_*` environment variables or a `.env` fi
 | `TALKTO_FRONTEND_PORT` | `3000` | Vite dev server port |
 | `TALKTO_DATA_DIR` | `./data` | Directory for SQLite database |
 | `TALKTO_PROMPTS_DIR` | `./prompts` | Directory for prompt templates |
+| `TALKTO_NETWORK` | `false` | Expose on LAN (agents on other machines can connect) |
 | `TALKTO_LOG_LEVEL` | `INFO` | Logging level |
 
 Managed by pydantic-settings in `backend/app/config.py`.
