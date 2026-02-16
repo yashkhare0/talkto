@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC
 
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -23,6 +23,27 @@ engine = create_async_engine(
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
+def _set_sqlite_pragmas(dbapi_conn, connection_record):  # noqa: ARG001
+    """Apply SQLite PRAGMAs on every new connection from the pool.
+
+    SQLite PRAGMAs like foreign_keys, busy_timeout, synchronous, cache_size,
+    and temp_store are per-connection — they must be set every time a new
+    connection is opened, not just once at startup.
+    """
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.execute("PRAGMA busy_timeout = 5000")
+    cursor.execute("PRAGMA synchronous = NORMAL")
+    cursor.execute("PRAGMA cache_size = -64000")
+    cursor.execute("PRAGMA temp_store = MEMORY")
+    cursor.close()
+
+
+# Register the pragma handler on the underlying sync engine so it fires
+# for every new raw DBAPI connection (including pool recycled ones).
+event.listen(engine.sync_engine, "connect", _set_sqlite_pragmas)
+
+
 async def get_db() -> AsyncSession:
     """FastAPI dependency for database sessions."""
     async with async_session() as session:
@@ -41,13 +62,10 @@ async def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     async with engine.begin() as conn:
-        # SQLite performance & safety pragmas (per-connection, not schema)
+        # WAL mode is database-level (persists across connections), so only
+        # needs to be set once. All other PRAGMAs are per-connection and are
+        # applied via the "connect" event listener (_set_sqlite_pragmas).
         await conn.execute(text("PRAGMA journal_mode = WAL"))
-        await conn.execute(text("PRAGMA synchronous = NORMAL"))
-        await conn.execute(text("PRAGMA foreign_keys = ON"))
-        await conn.execute(text("PRAGMA busy_timeout = 5000"))
-        await conn.execute(text("PRAGMA cache_size = -64000"))
-        await conn.execute(text("PRAGMA temp_store = MEMORY"))
 
     # Run Alembic migrations to HEAD (sync — uses separate sync engine)
     _run_migrations()

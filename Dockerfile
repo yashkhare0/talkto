@@ -38,10 +38,12 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
 RUN uv venv && uv pip install --no-cache .
 
-# Copy backend, CLI, and prompts
+# Copy backend, CLI, prompts, and Alembic migrations
 COPY backend/ backend/
 COPY cli/ cli/
 COPY prompts/ prompts/
+COPY alembic.ini ./
+COPY migrations/ migrations/
 
 # Copy built frontend from stage 1
 COPY --from=frontend-builder /app/frontend/dist frontend/dist

@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event, text
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.app.db import Base, get_db
@@ -42,11 +42,21 @@ _TestSessionLocal = async_sessionmaker(
 )
 
 
+def _set_test_pragmas(dbapi_conn, connection_record):  # noqa: ARG001
+    """Set SQLite PRAGMAs on every test connection (mirrors production behavior)."""
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.execute("PRAGMA busy_timeout = 5000")
+    cursor.close()
+
+
+event.listen(_test_engine.sync_engine, "connect", _set_test_pragmas)
+
+
 @pytest.fixture(autouse=True)
 async def _setup_db():
     """Create all tables before each test, drop them after."""
     async with _test_engine.begin() as conn:
-        await conn.execute(text("PRAGMA foreign_keys = ON"))
         await conn.run_sync(Base.metadata.create_all)
 
     yield
