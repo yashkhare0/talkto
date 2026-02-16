@@ -32,6 +32,10 @@ class PromptEngine:
         agent_type: str,
         project_name: str,
         project_channel: str,
+        operator_name: str = "",
+        operator_display_name: str = "",
+        operator_about: str = "",
+        operator_instructions: str = "",
     ) -> str:
         """Render the master prompt sent to agents on registration."""
         return self.render(
@@ -40,6 +44,10 @@ class PromptEngine:
             agent_type=agent_type,
             project_name=project_name,
             project_channel=project_channel,
+            operator_name=operator_name,
+            operator_display_name=operator_display_name,
+            operator_about=operator_about,
+            operator_instructions=operator_instructions,
         )
 
     def render_registration_rules(
@@ -53,10 +61,6 @@ class PromptEngine:
             agent_name=agent_name,
             project_channel=project_channel,
         )
-
-    def render_block(self, block_name: str, **kwargs: str) -> str:
-        """Render a composable block from blocks/ directory."""
-        return self.render(f"blocks/{block_name}", **kwargs)
 
     def get_feature_requests(self) -> str:
         """Load the feature requests markdown (no templating needed)."""
