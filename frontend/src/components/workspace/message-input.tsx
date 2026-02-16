@@ -13,7 +13,7 @@ interface MessageInputProps {
 }
 
 /** Extract the @-mention query being typed at the cursor position. */
-function getMentionQuery(text: string, cursorPos: number): { query: string; start: number } | null {
+export function getMentionQuery(text: string, cursorPos: number): { query: string; start: number } | null {
   // Walk backwards from cursor to find the @ trigger
   const before = text.slice(0, cursorPos);
   const match = before.match(/@([\w-]*)$/);

@@ -35,12 +35,16 @@ status: ## Check if servers are running
 
 # ── Testing ──────────────────────────────────────────
 
-test: ## Run all tests (pytest + tsc)
+test: ## Run all tests (pytest + vitest + tsc)
 	uv run pytest tests/ -v
+	cd frontend && pnpm test
 	cd frontend && npx tsc -b --noEmit
 
 test-py: ## Run Python tests only
 	uv run pytest tests/ -v
+
+test-fe: ## Run frontend tests only (vitest)
+	cd frontend && pnpm test
 
 test-ts: ## Run TypeScript type check only
 	cd frontend && npx tsc -b --noEmit

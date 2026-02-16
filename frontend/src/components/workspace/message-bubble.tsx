@@ -17,7 +17,7 @@ const MarkdownRenderer = lazy(
 const MARKDOWN_PATTERN =
   /[*_~`#\-\[\]!|>]|^\d+\.\s|^-\s/m;
 
-function isPlainText(content: string): boolean {
+export function isPlainText(content: string): boolean {
   return !MARKDOWN_PATTERN.test(content);
 }
 
@@ -132,7 +132,7 @@ function MessageContent({
   );
 }
 
-function formatTime(iso: string): string {
+export function formatTime(iso: string): string {
   try {
     const d = new Date(iso);
     return d.toLocaleTimeString(undefined, {

@@ -34,7 +34,7 @@ jobs:
         run: uv run pytest --cov --cov-report=term-missing
 
   frontend:
-    name: Frontend (typecheck + build)
+    name: Frontend (typecheck + test + build)
     runs-on: ubuntu-latest
 
     steps:
@@ -56,6 +56,10 @@ jobs:
 
       - name: Typecheck (tsc)
         run: npx tsc -b --noEmit
+        working-directory: frontend
+
+      - name: Test (vitest)
+        run: pnpm test
         working-directory: frontend
 
       - name: Build
