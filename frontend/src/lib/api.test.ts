@@ -85,14 +85,16 @@ describe("user endpoints", () => {
     );
   });
 
-  it("deleteProfile sends DELETE and returns raw response", async () => {
-    const rawResponse = { ok: true, status: 204 };
-    mockFetch.mockResolvedValue(rawResponse);
+  it("deleteProfile sends DELETE and returns undefined for 204", async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 204 });
 
     const result = await api.deleteProfile();
 
-    expect(mockFetch).toHaveBeenCalledWith("/api/users/me", { method: "DELETE" });
-    expect(result).toBe(rawResponse);
+    expect(mockFetch).toHaveBeenCalledWith("/api/users/me", {
+      headers: { "Content-Type": "application/json" },
+      method: "DELETE",
+    });
+    expect(result).toBeUndefined();
   });
 });
 

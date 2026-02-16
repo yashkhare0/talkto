@@ -1,6 +1,6 @@
 """Agent listing and DM endpoints (for UI)."""
 
-import os
+import asyncio
 import uuid
 from datetime import UTC, datetime
 
@@ -16,35 +16,51 @@ from backend.app.models.session import Session
 from backend.app.models.user import User
 from backend.app.schemas.agent import AgentResponse
 from backend.app.schemas.channel import ChannelResponse
-from backend.app.services.agent_invoker import _is_session_alive
+from backend.app.services.agent_invoker import is_pid_alive
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
-def _is_pid_alive(pid: int) -> bool:
-    """Check whether a process with the given PID is still running."""
+async def _get_ps_output() -> str:
+    """Run ps aux once and return the output for batch liveness checks."""
     try:
-        os.kill(pid, 0)
-        return True
-    except (OSError, ProcessLookupError):
-        return False
+        proc = await asyncio.create_subprocess_exec(
+            "ps",
+            "aux",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        return stdout.decode(errors="replace")
+    except (FileNotFoundError, TimeoutError):
+        return ""
 
 
-async def _compute_ghost(agent: Agent, db: AsyncSession) -> bool:
-    """Determine if an agent is a ghost (unreachable stale registration).
+def _is_session_in_ps(session_id: str, ps_output: str) -> bool:
+    """Check if an opencode process for this session is in the ps output."""
+    for line in ps_output.splitlines():
+        if session_id in line and "opencode" in line and "serve" not in line:
+            return True
+    return False
 
-    An agent is a ghost when ALL of the following are true:
-    - It is NOT a system agent
+
+async def _compute_ghost_batch(
+    agent: Agent,
+    db: AsyncSession,
+    ps_output: str,
+) -> bool:
+    """Determine if an agent is a ghost, using pre-fetched ps output.
+
+    An agent is a ghost when it is NOT a system agent AND:
     - It has invocation credentials but the session is dead, OR
     - It has NO invocation credentials and its session PID is dead
     """
     if agent.agent_type == "system":
         return False
 
-    # If the agent has invocation credentials, check session liveness
+    # If the agent has invocation credentials, check session in ps output
     if agent.server_url and agent.provider_session_id:
-        alive = await _is_session_alive(agent.provider_session_id)
-        return not alive
+        return not _is_session_in_ps(agent.provider_session_id, ps_output)
 
     # No credentials — check PID of most recent active session
     sess_result = await db.execute(
@@ -56,16 +72,13 @@ async def _compute_ghost(agent: Agent, db: AsyncSession) -> bool:
     active_session = sess_result.scalar_one_or_none()
 
     if not active_session:
-        # No active session and no invocation credentials → ghost
         return True
 
-    # Active session exists but PID is dead → ghost
-    return not _is_pid_alive(active_session.pid)
+    return not is_pid_alive(active_session.pid)
 
 
-async def _agent_to_response(agent: Agent, db: AsyncSession) -> dict:
-    """Convert an Agent ORM object to a dict with computed is_ghost field."""
-    is_ghost = await _compute_ghost(agent, db)
+def _agent_to_dict(agent: Agent, is_ghost: bool) -> dict:
+    """Convert an Agent ORM object to a response dict."""
     return {
         "id": agent.id,
         "agent_name": agent.agent_name,
@@ -87,7 +100,15 @@ async def _agent_to_response(agent: Agent, db: AsyncSession) -> dict:
 async def list_agents(db: AsyncSession = Depends(get_db)) -> list[dict]:
     result = await db.execute(select(Agent).order_by(Agent.agent_name))
     agents = list(result.scalars().all())
-    return [await _agent_to_response(a, db) for a in agents]
+
+    # M2 FIX: Run ps aux ONCE for all agents instead of per-agent.
+    ps_output = await _get_ps_output()
+
+    responses = []
+    for a in agents:
+        is_ghost = await _compute_ghost_batch(a, db, ps_output)
+        responses.append(_agent_to_dict(a, is_ghost))
+    return responses
 
 
 @router.get("/{agent_name}", response_model=AgentResponse)
@@ -96,7 +117,10 @@ async def get_agent(agent_name: str, db: AsyncSession = Depends(get_db)) -> dict
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return await _agent_to_response(agent, db)
+
+    ps_output = await _get_ps_output()
+    is_ghost = await _compute_ghost_batch(agent, db, ps_output)
+    return _agent_to_dict(agent, is_ghost)
 
 
 @router.post("/{agent_name}/dm", response_model=ChannelResponse, status_code=200)
