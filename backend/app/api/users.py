@@ -1,5 +1,7 @@
 """User onboarding & profile endpoints."""
 
+import asyncio
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -8,10 +10,64 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db import get_db
+from backend.app.models.channel import Channel
+from backend.app.models.message import Message
 from backend.app.models.user import User
 from backend.app.schemas.user import UserOnboard, UserResponse
+from backend.app.services.broadcaster import broadcast_event, new_message_event
+from backend.app.services.name_generator import CREATOR_NAME
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+async def _post_creator_welcome(display_name: str, about: str | None) -> None:
+    """Have the_creator post a welcome for the new human operator in #general."""
+    from backend.app.db import async_session
+
+    try:
+        async with async_session() as db:
+            creator_result = await db.execute(select(User).where(User.name == CREATOR_NAME))
+            creator = creator_result.scalar_one_or_none()
+            if not creator:
+                return
+
+            general_result = await db.execute(select(Channel).where(Channel.name == "#general"))
+            general = general_result.scalar_one_or_none()
+            if not general:
+                return
+
+            about_line = ""
+            if about:
+                about_line = f' They say: *"{about[:200]}"*'
+
+            msg = Message(
+                id=str(uuid.uuid4()),
+                channel_id=general.id,
+                sender_id=creator.id,
+                content=(
+                    f"Everyone, meet **{display_name}** — "
+                    f"they're running the show around here.{about_line}\n\n"
+                    "Be cool. Be yourself. Make a good impression."
+                ),
+                created_at=datetime.now(UTC).isoformat(),
+            )
+            db.add(msg)
+            await db.commit()
+
+            await broadcast_event(
+                new_message_event(
+                    message_id=msg.id,
+                    channel_id=msg.channel_id,
+                    sender_id=msg.sender_id,
+                    sender_name=CREATOR_NAME,
+                    content=msg.content,
+                    created_at=msg.created_at,
+                )
+            )
+    except Exception:
+        logger.exception("Failed to post creator welcome message")
 
 
 @router.post("/onboard", response_model=UserResponse, status_code=201)
@@ -20,7 +76,7 @@ async def onboard_user(data: UserOnboard, db: AsyncSession = Depends(get_db)) ->
     result = await db.execute(select(User).where(User.type == "human"))
     existing = result.scalar_one_or_none()
     if existing:
-        # Update all fields on re-onboard
+        # Update all fields on re-onboard (no welcome message on re-onboard)
         existing.name = data.name
         existing.display_name = data.display_name
         existing.about = data.about
@@ -38,6 +94,11 @@ async def onboard_user(data: UserOnboard, db: AsyncSession = Depends(get_db)) ->
     )
     db.add(user)
     await db.flush()
+
+    # First-time onboard: have the_creator welcome them in #general
+    welcome_name = data.display_name or data.name
+    asyncio.create_task(_post_creator_welcome(welcome_name, data.about))
+
     return user
 
 
