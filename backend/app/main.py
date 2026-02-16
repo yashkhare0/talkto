@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from backend.app.api.agents import router as agents_router
 from backend.app.api.channels import router as channels_router
@@ -115,8 +116,6 @@ async def health() -> dict[str, str]:
     db_ok = "ok"
     try:
         async with engine.connect() as conn:
-            from sqlalchemy import text
-
             await conn.execute(text("SELECT 1"))
     except Exception:
         db_ok = "error"

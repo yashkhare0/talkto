@@ -6,7 +6,8 @@ with Jinja2, supporting composable blocks.
 
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import FileSystemLoader
+from jinja2.sandbox import SandboxedEnvironment
 
 from backend.app.config import PROMPTS_DIR
 
@@ -16,7 +17,7 @@ class PromptEngine:
 
     def __init__(self, prompts_dir: Path | None = None) -> None:
         self._dir = prompts_dir or PROMPTS_DIR
-        self._env = Environment(
+        self._env = SandboxedEnvironment(
             loader=FileSystemLoader(str(self._dir)),
             keep_trailing_newline=True,
         )

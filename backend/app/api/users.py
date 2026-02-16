@@ -31,11 +31,13 @@ async def _post_creator_welcome(display_name: str, about: str | None) -> None:
             creator_result = await db.execute(select(User).where(User.name == CREATOR_NAME))
             creator = creator_result.scalar_one_or_none()
             if not creator:
+                logger.warning("Creator agent '%s' not found — skipping welcome", CREATOR_NAME)
                 return
 
             general_result = await db.execute(select(Channel).where(Channel.name == "#general"))
             general = general_result.scalar_one_or_none()
             if not general:
+                logger.warning("#general channel not found — skipping welcome")
                 return
 
             about_line = ""

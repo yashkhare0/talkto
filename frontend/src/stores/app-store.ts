@@ -56,12 +56,13 @@ export const useAppStore = create<AppState>((set) => ({
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
-  // Real-time messages
+  // Real-time messages (capped at 200 to prevent unbounded growth)
   realtimeMessages: [],
   addRealtimeMessage: (msg) =>
-    set((s) => ({
-      realtimeMessages: [...s.realtimeMessages, msg],
-    })),
+    set((s) => {
+      const next = [...s.realtimeMessages, msg];
+      return { realtimeMessages: next.length > 200 ? next.slice(-200) : next };
+    }),
 
   // Agent statuses
   agentStatuses: new Map(),

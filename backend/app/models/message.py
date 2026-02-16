@@ -19,6 +19,7 @@ class Message(Base):
 
     __table_args__ = (
         Index("idx_messages_channel_created", "channel_id", "created_at"),
+        Index("idx_messages_sender", "sender_id"),
     )
 
     # Relationships

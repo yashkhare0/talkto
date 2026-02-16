@@ -24,6 +24,7 @@ export function useWebSocket(enabled: boolean = true) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const heartbeatTimer = useRef<ReturnType<typeof setInterval>>(undefined);
+  const pendingSubscriptions = useRef<string[]>([]);
   const mountedRef = useRef(true);
   const qc = useQueryClient();
 
@@ -111,6 +112,12 @@ export function useWebSocket(enabled: boolean = true) {
     ws.onopen = () => {
       setWsConnected(true);
 
+      // Flush any subscriptions that were queued before the socket was open
+      if (pendingSubscriptions.current.length > 0) {
+        ws.send(JSON.stringify({ action: "subscribe", channel_ids: pendingSubscriptions.current }));
+        pendingSubscriptions.current = [];
+      }
+
       // Start heartbeat
       heartbeatTimer.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -150,6 +157,9 @@ export function useWebSocket(enabled: boolean = true) {
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ action: "subscribe", channel_ids: channelIds }));
+    } else {
+      // Queue subscriptions until the socket is open
+      pendingSubscriptions.current = channelIds;
     }
   }, []);
 
