@@ -1,0 +1,9 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "talkto": {
+      "type": "remote",
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}

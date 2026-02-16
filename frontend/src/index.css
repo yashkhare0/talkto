@@ -125,3 +125,76 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ─── highlight.js syntax theme (matches app light/dark mode) ─── */
+
+:root {
+  --hljs-bg: oklch(0.96 0 0);
+  --hljs-fg: oklch(0.25 0 0);
+  --hljs-comment: oklch(0.55 0 0);
+  --hljs-keyword: oklch(0.45 0.2 280);
+  --hljs-string: oklch(0.5 0.15 150);
+  --hljs-number: oklch(0.55 0.2 30);
+  --hljs-function: oklch(0.45 0.18 250);
+  --hljs-variable: oklch(0.45 0.12 200);
+  --hljs-type: oklch(0.5 0.15 60);
+  --hljs-tag: oklch(0.5 0.2 20);
+  --hljs-attr: oklch(0.5 0.15 80);
+  --hljs-built-in: oklch(0.45 0.15 200);
+  --hljs-selector: oklch(0.5 0.15 330);
+  --hljs-meta: oklch(0.5 0.1 200);
+}
+
+.dark {
+  --hljs-bg: oklch(0.18 0 0);
+  --hljs-fg: oklch(0.85 0 0);
+  --hljs-comment: oklch(0.5 0 0);
+  --hljs-keyword: oklch(0.7 0.18 280);
+  --hljs-string: oklch(0.7 0.15 150);
+  --hljs-number: oklch(0.75 0.18 50);
+  --hljs-function: oklch(0.72 0.16 220);
+  --hljs-variable: oklch(0.75 0.12 200);
+  --hljs-type: oklch(0.72 0.14 80);
+  --hljs-tag: oklch(0.72 0.18 20);
+  --hljs-attr: oklch(0.72 0.14 80);
+  --hljs-built-in: oklch(0.7 0.14 200);
+  --hljs-selector: oklch(0.72 0.14 330);
+  --hljs-meta: oklch(0.65 0.1 200);
+}
+
+.hljs {
+  color: var(--hljs-fg);
+  background: var(--hljs-bg);
+}
+.hljs-comment,
+.hljs-quote { color: var(--hljs-comment); font-style: italic; }
+.hljs-keyword,
+.hljs-selector-tag { color: var(--hljs-keyword); font-weight: 600; }
+.hljs-string,
+.hljs-doctag,
+.hljs-template-variable,
+.hljs-addition { color: var(--hljs-string); }
+.hljs-number,
+.hljs-literal,
+.hljs-regexp { color: var(--hljs-number); }
+.hljs-title,
+.hljs-title\.function_,
+.hljs-section { color: var(--hljs-function); font-weight: 600; }
+.hljs-variable,
+.hljs-template-variable { color: var(--hljs-variable); }
+.hljs-type,
+.hljs-title\.class_ { color: var(--hljs-type); }
+.hljs-tag { color: var(--hljs-tag); }
+.hljs-attr,
+.hljs-attribute { color: var(--hljs-attr); }
+.hljs-built_in,
+.hljs-name { color: var(--hljs-built-in); }
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-selector-attr,
+.hljs-selector-pseudo { color: var(--hljs-selector); }
+.hljs-meta,
+.hljs-meta .hljs-keyword { color: var(--hljs-meta); }
+.hljs-deletion { color: oklch(0.6 0.2 20); text-decoration: line-through; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }

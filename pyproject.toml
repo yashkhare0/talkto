@@ -17,6 +17,7 @@ dependencies = [
     "fastmcp",
     "websockets",
     "python-multipart",
+    "httpx",
 ]
 
 [project.optional-dependencies]
