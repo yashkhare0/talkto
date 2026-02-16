@@ -1,8 +1,13 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChannelCreate(BaseModel):
-    name: str
+    name: str = Field(
+        min_length=1,
+        max_length=80,
+        pattern=r"^#?[a-z0-9][a-z0-9_-]*$",
+        description="Channel name. Lowercase alphanumeric, hyphens, underscores. Auto-prefixed with #.",
+    )
 
 
 class ChannelResponse(BaseModel):

@@ -250,7 +250,7 @@ async def get_agent_messages(
                 )
                 .join(User, Message.sender_id == User.id)
                 .join(Channel, Message.channel_id == Channel.id)
-                .where(Message.mentions.contains(agent_name))
+                .where(Message.mentions.contains(f'"{agent_name}"'))
                 .order_by(desc(Message.created_at))
                 .limit(limit)
             )

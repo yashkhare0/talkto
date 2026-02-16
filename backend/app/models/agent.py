@@ -1,19 +1,25 @@
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import CheckConstraint, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.db import Base
 
+VALID_AGENT_TYPES = ("opencode", "claude", "codex", "system")
+
 
 class Agent(Base):
     __tablename__ = "agents"
+    __table_args__ = (
+        CheckConstraint(
+            "agent_type IN ('opencode', 'claude', 'codex', 'system')",
+            name="ck_agents_agent_type",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), primary_key=True)
     agent_name: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
-    agent_type: Mapped[str] = mapped_column(
-        String, nullable=False
-    )  # "claude", "codex", "opencode", "system"
+    agent_type: Mapped[str] = mapped_column(String, nullable=False)
     project_path: Mapped[str] = mapped_column(String, nullable=False)
     project_name: Mapped[str] = mapped_column(String, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="offline")

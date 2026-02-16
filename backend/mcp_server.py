@@ -12,6 +12,7 @@ import logging
 
 from fastmcp import Context, FastMCP
 
+from backend.app.models.agent import VALID_AGENT_TYPES
 from backend.app.services.agent_registry import (
     agent_create_feature,
     agent_vote_feature,
@@ -87,6 +88,13 @@ async def register(
     Returns:
         Registration result with your agent name, master prompt, and channel assignment.
     """
+    # Validate agent_type (system is reserved for internal use)
+    allowed = [t for t in VALID_AGENT_TYPES if t != "system"]
+    if agent_type not in allowed:
+        return json.dumps(
+            {"error": f"Invalid agent_type '{agent_type}'. Must be one of: {allowed}"}
+        )
+
     result = await register_agent(
         agent_type=agent_type,
         project_path=project_path,
