@@ -75,14 +75,15 @@ async def register_agent(
     project_name = _derive_project_name(project_path)
     channel_name = _make_channel_name(project_name)
 
-    # Auto-discover OpenCode server URL if not provided
-    if not server_url:
+    # Auto-discover OpenCode server URL if not provided.
+    # Only attempt auto-discovery for opencode agents — non-OpenCode agents
+    # (claude, codex) shouldn't be re-classified just because an OpenCode
+    # instance happens to be running on the same machine.
+    if not server_url and agent_type == "opencode":
         try:
             discovery = await auto_discover(project_path)
             if discovery:
                 server_url = discovery.get("server_url")
-                if server_url and agent_type != "opencode":
-                    agent_type = "opencode"
                 logger.info("Auto-discovered server_url for registration: %s", server_url)
         except Exception:
             logger.exception("Auto-discovery failed during registration")
@@ -210,8 +211,8 @@ async def connect_agent(
         if not agent:
             return {"error": f"Agent '{agent_name}' not found. Use register first."}
 
-        # Auto-discover server_url now that we have the agent's project_path
-        if not server_url:
+        # Auto-discover server_url for OpenCode agents only
+        if not server_url and agent.agent_type == "opencode":
             try:
                 discovery = await auto_discover(agent.project_path)
                 if discovery:
