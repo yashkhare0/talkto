@@ -1,6 +1,5 @@
 """Message routing with priority-based retrieval for agents."""
 
-import asyncio
 import json
 import logging
 import uuid
@@ -14,118 +13,10 @@ from backend.app.models.channel import Channel
 from backend.app.models.channel_member import ChannelMember
 from backend.app.models.message import Message
 from backend.app.models.user import User
-from backend.app.services.agent_invoker import (
-    format_invocation_prompt,
-    invoke_agent_async,
-    is_agent_ghost,
-)
-from backend.app.services.broadcaster import (
-    agent_typing_event,
-    broadcast_event,
-    new_message_event,
-)
+from backend.app.services.agent_invoker import invoke_for_message, spawn_background_task
+from backend.app.services.broadcaster import broadcast_event, new_message_event
 
 logger = logging.getLogger(__name__)
-
-
-async def _invoke_agents_for_agent_message(
-    sender_name: str,
-    channel_id: str,
-    channel_name: str,
-    content: str,
-    mentions: list[str] | None,
-) -> None:
-    """Invoke agents when a message is sent via MCP (agent-to-agent or agent-to-DM).
-
-    - DM channel (#dm-{agent_name}): invoke that agent directly
-    - @mentions: invoke each mentioned agent with recent channel context
-    - Never invoke the sender (no self-invocation loops)
-    """
-    logger.info(
-        "[INVOKE-MCP] Starting invocation: sender=%s channel=%s mentions=%s",
-        sender_name,
-        channel_name,
-        mentions,
-    )
-    invoked: set[str] = set()
-
-    # DM channel → invoke the target agent
-    if channel_name.startswith("#dm-"):
-        target = channel_name.removeprefix("#dm-")
-        if target == sender_name:
-            logger.info("[INVOKE-MCP] Skipping self-invocation for '%s'", target)
-        elif await is_agent_ghost(target):
-            logger.info("[INVOKE-MCP] Skipping ghost agent '%s'", target)
-        else:
-            logger.info("[INVOKE-MCP] Invoking DM target '%s'", target)
-            await broadcast_event(agent_typing_event(target, channel_id, True))
-            prompt = format_invocation_prompt(sender_name, channel_name, content)
-            ok = await invoke_agent_async(
-                agent_name=target,
-                message=prompt,
-            )
-            logger.info("[INVOKE-MCP] invoke_agent_async result for '%s': %s", target, ok)
-            if ok:
-                invoked.add(target)
-                await broadcast_event(agent_typing_event(target, channel_id, False))
-            else:
-                await broadcast_event(
-                    agent_typing_event(
-                        target, channel_id, False, error=f"{target} is not reachable"
-                    )
-                )
-
-    # @mentions → invoke with recent context
-    if mentions:
-        logger.info("[INVOKE-MCP] Processing %d @mentions: %s", len(mentions), mentions)
-        context_text = ""
-        async with async_session() as db:
-            query = (
-                select(
-                    Message,
-                    func.coalesce(User.display_name, User.name).label("sn"),
-                )
-                .join(User, Message.sender_id == User.id)
-                .where(Message.channel_id == channel_id)
-                .order_by(desc(Message.created_at))
-                .limit(5)
-            )
-            result = await db.execute(query)
-            rows = list(result.all())
-        if rows:
-            rows.reverse()
-            lines = [f"  {sn}: {m.content}" for m, sn in rows]
-            context_text = "\n".join(lines)
-
-        for mentioned in mentions:
-            if mentioned in invoked or mentioned == sender_name:
-                continue
-            if await is_agent_ghost(mentioned):
-                logger.info("[INVOKE-MCP] Skipping ghost '%s' via @mention", mentioned)
-                continue
-            await broadcast_event(agent_typing_event(mentioned, channel_id, True))
-            prompt = format_invocation_prompt(
-                sender_name,
-                channel_name,
-                content,
-                recent_context=context_text or None,
-            )
-            ok = await invoke_agent_async(
-                agent_name=mentioned,
-                message=prompt,
-            )
-            logger.info("[INVOKE-MCP] invoke_agent_async for '%s': %s", mentioned, ok)
-            if ok:
-                invoked.add(mentioned)
-                await broadcast_event(agent_typing_event(mentioned, channel_id, False))
-            else:
-                await broadcast_event(
-                    agent_typing_event(
-                        mentioned, channel_id, False, error=f"{mentioned} is not reachable"
-                    )
-                )
-
-    logger.info("[INVOKE-MCP] Complete. Invoked: %s", invoked or "none")
 
 
 async def send_agent_message(
@@ -176,9 +67,10 @@ async def send_agent_message(
         )
 
         # Fire-and-forget: invoke agents for DMs and @mentions
+        # Uses spawn_background_task to prevent GC of unfinished tasks (C4).
         async def _invoke_with_error_handling() -> None:
             try:
-                await _invoke_agents_for_agent_message(
+                await invoke_for_message(
                     sender_name=agent.agent_name,
                     channel_id=channel.id,
                     channel_name=channel_name,
@@ -188,7 +80,7 @@ async def send_agent_message(
             except Exception:
                 logger.exception("[INVOKE-MCP] Unhandled error in fire-and-forget invocation task")
 
-        asyncio.create_task(_invoke_with_error_handling())
+        spawn_background_task(_invoke_with_error_handling())
 
         return {"message_id": msg.id, "channel": channel_name}
 

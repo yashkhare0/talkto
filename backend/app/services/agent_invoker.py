@@ -371,19 +371,158 @@ async def invoke_agent_async(agent_name: str, message: str, context: str | None 
         return False
 
 
+# ---------------------------------------------------------------------------
+# Background task tracking — prevents GC of fire-and-forget tasks (C4).
+# ---------------------------------------------------------------------------
+
+_background_tasks: set[asyncio.Task] = set()  # type: ignore[type-arg]
+
+
+def spawn_background_task(coro) -> asyncio.Task:
+    """Create a tracked background task that won't be garbage collected.
+
+    Use this instead of bare asyncio.create_task() for fire-and-forget work.
+    The task is automatically removed from the tracking set when it completes.
+    """
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
+
+# ---------------------------------------------------------------------------
+# Shared invocation logic for DMs and @mentions (M7).
+# Used by both the REST API (human messages) and MCP service (agent messages).
+# ---------------------------------------------------------------------------
+
+
+async def invoke_for_message(
+    sender_name: str,
+    channel_id: str,
+    channel_name: str,
+    content: str,
+    mentions: list[str] | None,
+) -> None:
+    """Invoke agents based on DM channel or @mentions.
+
+    - DM channel (#dm-{agent_name}): invoke that agent with the message directly
+    - @mentions in any channel: invoke each mentioned agent with last 5 messages
+    - Never invokes the sender (prevents self-invocation loops)
+    """
+    from backend.app.services.broadcaster import (
+        agent_typing_event,
+        broadcast_event,
+    )
+
+    logger.info(
+        "[INVOKE] Starting invocation: sender=%s channel=%s mentions=%s",
+        sender_name,
+        channel_name,
+        mentions,
+    )
+    invoked: set[str] = set()
+
+    # DM channel → invoke the target agent
+    if channel_name.startswith("#dm-"):
+        target = channel_name.removeprefix("#dm-")
+        if target == sender_name:
+            logger.info("[INVOKE] Skipping self-invocation for '%s'", target)
+        elif await is_agent_ghost(target):
+            logger.info("[INVOKE] Skipping ghost agent '%s'", target)
+        else:
+            await broadcast_event(agent_typing_event(target, channel_id, True))
+            prompt = format_invocation_prompt(sender_name, channel_name, content)
+            ok = await invoke_agent_async(agent_name=target, message=prompt)
+            if ok:
+                invoked.add(target)
+                await broadcast_event(agent_typing_event(target, channel_id, False))
+                logger.info("[INVOKE] Invoked '%s' via DM", target)
+            else:
+                await broadcast_event(
+                    agent_typing_event(
+                        target, channel_id, False, error=f"{target} is not reachable"
+                    )
+                )
+                logger.warning("[INVOKE] Agent '%s' not invocable via DM", target)
+
+    # @mentions → invoke each mentioned agent with recent channel context
+    if mentions:
+        context_text = await _fetch_recent_context(channel_id, limit=5)
+
+        for mentioned in mentions:
+            if mentioned in invoked or mentioned == sender_name:
+                continue
+            if await is_agent_ghost(mentioned):
+                logger.info("[INVOKE] Skipping ghost '%s' via @mention", mentioned)
+                continue
+            await broadcast_event(agent_typing_event(mentioned, channel_id, True))
+            prompt = format_invocation_prompt(
+                sender_name,
+                channel_name,
+                content,
+                recent_context=context_text or None,
+            )
+            ok = await invoke_agent_async(agent_name=mentioned, message=prompt)
+            if ok:
+                invoked.add(mentioned)
+                await broadcast_event(agent_typing_event(mentioned, channel_id, False))
+                logger.info("[INVOKE] Invoked '%s' via @mention in %s", mentioned, channel_name)
+            else:
+                await broadcast_event(
+                    agent_typing_event(
+                        mentioned, channel_id, False, error=f"{mentioned} is not reachable"
+                    )
+                )
+                logger.warning("[INVOKE] Agent '%s' not invocable via @mention", mentioned)
+
+    logger.info("[INVOKE] Complete. Invoked agents: %s", invoked or "none")
+
+
+async def _fetch_recent_context(channel_id: str, limit: int = 5) -> str:
+    """Fetch the last N messages from a channel as context text."""
+    from sqlalchemy import desc, func
+
+    from backend.app.models.message import Message
+    from backend.app.models.user import User
+
+    async with async_session() as db:
+        query = (
+            select(
+                Message,
+                func.coalesce(User.display_name, User.name).label("sender_name"),
+            )
+            .join(User, Message.sender_id == User.id)
+            .where(Message.channel_id == channel_id)
+            .order_by(desc(Message.created_at))
+            .limit(limit)
+        )
+        result = await db.execute(query)
+        rows = list(result.all())
+
+    if not rows:
+        return ""
+
+    rows.reverse()
+    return "\n".join(f"  {name}: {msg.content}" for msg, name in rows)
+
+
 async def is_agent_invocable(agent_name: str) -> bool:
     """Check if an agent can be invoked (has server_url and session_id set)."""
     info = await _get_agent_invocation_info(agent_name)
     return info is not None
 
 
-def _is_pid_alive(pid: int) -> bool:
+def is_pid_alive(pid: int) -> bool:
     """Check whether a process with the given PID is still running."""
     try:
         os.kill(pid, 0)
         return True
     except (OSError, ProcessLookupError):
         return False
+
+
+# Make _is_session_alive public for use in agents.py ghost detection.
+is_session_alive = _is_session_alive
 
 
 async def is_agent_ghost(agent_name: str) -> bool:
@@ -434,7 +573,7 @@ async def is_agent_ghost(agent_name: str) -> bool:
             logger.info("[GHOST] '%s' has no active session and no credentials — ghost", agent_name)
             return True
 
-        pid_alive = _is_pid_alive(active_session.pid)
+        pid_alive = is_pid_alive(active_session.pid)
         is_ghost = not pid_alive
         logger.info(
             "[GHOST] '%s' session PID=%d alive=%s — ghost=%s",
