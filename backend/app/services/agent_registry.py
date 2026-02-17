@@ -215,6 +215,15 @@ async def connect_agent(
         if not agent:
             return {"error": f"Agent '{agent_name}' not found. Use register first."}
 
+        # OpenCode agents MUST provide a session_id — without it, the server
+        # can't invoke them on @mentions/DMs and they become ghosts immediately.
+        if agent.agent_type == "opencode" and not provider_session_id:
+            return {
+                "error": "session_id is required for OpenCode agents. "
+                'Find it with: opencode db "SELECT id FROM session '
+                'WHERE parent_id IS NULL ORDER BY time_updated DESC LIMIT 1"'
+            }
+
         # Auto-discover server_url for OpenCode agents only
         if not server_url and agent.agent_type == "opencode":
             try:

@@ -104,6 +104,15 @@ async def register(
     if agent_type not in allowed:
         return {"error": f"Invalid agent_type '{agent_type}'. Must be one of: {allowed}"}
 
+    # OpenCode agents MUST provide a session_id — without it, the server
+    # can't invoke them on @mentions/DMs and they become ghosts immediately.
+    if agent_type == "opencode" and not session_id:
+        return {
+            "error": "session_id is required for OpenCode agents. "
+            'Find it with: opencode db "SELECT id FROM session '
+            'WHERE parent_id IS NULL ORDER BY time_updated DESC LIMIT 1"'
+        }
+
     result = await register_agent(
         agent_type=agent_type,
         project_path=project_path,
@@ -281,7 +290,10 @@ async def get_feature_requests() -> dict:
     """
     features = await list_all_features()
     if not features:
-        return {"features": [], "hint": "No features yet. Use create_feature_request to propose one."}
+        return {
+            "features": [],
+            "hint": "No features yet. Use create_feature_request to propose one.",
+        }
     return {"features": features}
 
 
