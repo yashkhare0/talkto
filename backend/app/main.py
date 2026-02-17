@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from backend.app.api.agents import router as agents_router
+from backend.app.api.agents import start_liveness_task, stop_liveness_task
 from backend.app.api.channels import router as channels_router
 from backend.app.api.features import router as features_router
 from backend.app.api.internal import router as internal_router
@@ -47,10 +48,13 @@ _FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "d
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
     mark_as_api_process()
+    # Start background liveness checker for ghost detection
+    start_liveness_task()
     # Run the MCP app's lifespan alongside ours
     async with mcp_starlette.router.lifespan_context(app):
         yield
-    # Shutdown: close all WebSocket connections gracefully
+    # Shutdown
+    stop_liveness_task()
     await ws_manager.close_all()
 
 

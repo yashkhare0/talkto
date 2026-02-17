@@ -1,6 +1,7 @@
 """Agent listing and DM endpoints (for UI)."""
 
 import asyncio
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -8,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db import get_db
+from backend.app.db import async_session, get_db
 from backend.app.models.agent import Agent
 from backend.app.models.channel import Channel
 from backend.app.models.channel_member import ChannelMember
@@ -18,15 +19,24 @@ from backend.app.schemas.agent import AgentResponse
 from backend.app.schemas.channel import ChannelResponse
 from backend.app.services.agent_invoker import is_pid_alive
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/agents", tags=["agents"])
+
+# ---------------------------------------------------------------------------
+# Background liveness cache — updated every 30s instead of per-request ps aux
+# ---------------------------------------------------------------------------
+
+# Maps agent_id -> is_ghost (bool). Updated by the background task.
+_ghost_cache: dict[str, bool] = {}
+_liveness_task: asyncio.Task | None = None
 
 
 async def _get_ps_output() -> str:
     """Run ps aux once and return the output for batch liveness checks."""
     try:
         proc = await asyncio.create_subprocess_exec(
-            "ps",
-            "aux",
+            "ps", "aux",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -37,32 +47,17 @@ async def _get_ps_output() -> str:
 
 
 def _is_session_in_ps(session_id: str, ps_output: str) -> bool:
-    """Check if an opencode process for this session is in the ps output."""
     for line in ps_output.splitlines():
         if session_id in line and "opencode" in line and "serve" not in line:
             return True
     return False
 
 
-async def _compute_ghost_batch(
-    agent: Agent,
-    db: AsyncSession,
-    ps_output: str,
-) -> bool:
-    """Determine if an agent is a ghost, using pre-fetched ps output.
-
-    An agent is a ghost when it is NOT a system agent AND:
-    - It has invocation credentials but the session is dead, OR
-    - It has NO invocation credentials and its session PID is dead
-    """
+async def _compute_ghost(agent: Agent, db: AsyncSession, ps_output: str) -> bool:
     if agent.agent_type == "system":
         return False
-
-    # If the agent has invocation credentials, check session in ps output
     if agent.server_url and agent.provider_session_id:
         return not _is_session_in_ps(agent.provider_session_id, ps_output)
-
-    # No credentials — check PID of most recent active session
     sess_result = await db.execute(
         select(Session)
         .where(Session.agent_id == agent.id, Session.is_active == 1)
@@ -70,11 +65,47 @@ async def _compute_ghost_batch(
         .limit(1)
     )
     active_session = sess_result.scalar_one_or_none()
-
     if not active_session:
         return True
-
     return not is_pid_alive(active_session.pid)
+
+
+async def _refresh_ghost_cache() -> None:
+    """Refresh the ghost cache for all agents."""
+    try:
+        ps_output = await _get_ps_output()
+        async with async_session() as db:
+            result = await db.execute(select(Agent))
+            agents = list(result.scalars().all())
+            new_cache: dict[str, bool] = {}
+            for agent in agents:
+                new_cache[agent.id] = await _compute_ghost(agent, db, ps_output)
+            _ghost_cache.clear()
+            _ghost_cache.update(new_cache)
+    except Exception:
+        logger.exception("Failed to refresh ghost cache")
+
+
+async def _liveness_loop() -> None:
+    """Background loop that refreshes ghost cache every 30 seconds."""
+    while True:
+        await _refresh_ghost_cache()
+        await asyncio.sleep(30)
+
+
+def start_liveness_task() -> None:
+    """Start the background liveness checker. Call once at app startup."""
+    global _liveness_task
+    if _liveness_task is None or _liveness_task.done():
+        _liveness_task = asyncio.create_task(_liveness_loop())
+
+
+def stop_liveness_task() -> None:
+    """Stop the background liveness checker."""
+    global _liveness_task
+    if _liveness_task and not _liveness_task.done():
+        _liveness_task.cancel()
+        _liveness_task = None
 
 
 def _agent_to_dict(agent: Agent, is_ghost: bool) -> dict:
@@ -101,12 +132,10 @@ async def list_agents(db: AsyncSession = Depends(get_db)) -> list[dict]:
     result = await db.execute(select(Agent).order_by(Agent.agent_name))
     agents = list(result.scalars().all())
 
-    # M2 FIX: Run ps aux ONCE for all agents instead of per-agent.
-    ps_output = await _get_ps_output()
-
+    # Use cached ghost status instead of running ps aux per request
     responses = []
     for a in agents:
-        is_ghost = await _compute_ghost_batch(a, db, ps_output)
+        is_ghost = _ghost_cache.get(a.id, False)
         responses.append(_agent_to_dict(a, is_ghost))
     return responses
 
@@ -118,8 +147,7 @@ async def get_agent(agent_name: str, db: AsyncSession = Depends(get_db)) -> dict
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    ps_output = await _get_ps_output()
-    is_ghost = await _compute_ghost_batch(agent, db, ps_output)
+    is_ghost = _ghost_cache.get(agent.id, False)
     return _agent_to_dict(agent, is_ghost)
 
 
