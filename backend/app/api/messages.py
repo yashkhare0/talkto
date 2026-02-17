@@ -35,6 +35,7 @@ async def get_messages(
         select(
             Message,
             func.coalesce(User.display_name, User.name).label("sender_name"),
+            User.type.label("sender_type"),
         )
         .join(User, Message.sender_id == User.id)
         .where(Message.channel_id == channel_id)
@@ -51,7 +52,7 @@ async def get_messages(
     rows = result.all()
 
     messages = []
-    for msg, sender_name in rows:
+    for msg, sender_name, sender_type in rows:
         mentions = json.loads(msg.mentions) if msg.mentions else None
         messages.append(
             {
@@ -59,6 +60,7 @@ async def get_messages(
                 "channel_id": msg.channel_id,
                 "sender_id": msg.sender_id,
                 "sender_name": sender_name,
+                "sender_type": sender_type,
                 "content": msg.content,
                 "mentions": mentions,
                 "parent_id": msg.parent_id,
@@ -98,6 +100,7 @@ async def send_message(
         channel_name=channel_name or "",
         content=data.content,
         mentions=data.mentions,
+        sender_type=user.type,
     )
 
     return {
@@ -105,6 +108,7 @@ async def send_message(
         "channel_id": msg.channel_id,
         "sender_id": msg.sender_id,
         "sender_name": user.display_name or user.name,
+        "sender_type": user.type,
         "content": msg.content,
         "mentions": data.mentions,
         "parent_id": msg.parent_id,

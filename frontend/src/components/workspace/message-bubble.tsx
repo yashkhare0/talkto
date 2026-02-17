@@ -22,7 +22,7 @@ export function MessageBubble({
   isOwnMessage,
   showSender,
 }: MessageBubbleProps) {
-  const isAgent = !isOwnMessage && message.sender_name?.includes("_");
+  const isAgent = message.sender_type === "agent";
   const time = formatTime(message.created_at);
 
   return (

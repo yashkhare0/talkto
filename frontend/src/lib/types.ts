@@ -31,6 +31,7 @@ export interface Message {
   channel_id: string;
   sender_id: string;
   sender_name: string | null;
+  sender_type: "human" | "agent" | null;
   content: string;
   mentions: string[] | null;
   parent_id: string | null;
@@ -85,6 +86,7 @@ export interface WSNewMessageData {
   channel_id: string;
   sender_id: string;
   sender_name: string;
+  sender_type: "human" | "agent";
   content: string;
   mentions: string[];
   parent_id: string | null;

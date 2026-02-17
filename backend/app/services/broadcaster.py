@@ -83,6 +83,7 @@ def new_message_event(
     mentions: list[str] | None = None,
     parent_id: str | None = None,
     created_at: str = "",
+    sender_type: str = "agent",
 ) -> dict[str, Any]:
     """Create a new_message WebSocket event."""
     return {
@@ -92,6 +93,7 @@ def new_message_event(
             "channel_id": channel_id,
             "sender_id": sender_id,
             "sender_name": sender_name,
+            "sender_type": sender_type,
             "content": content,
             "mentions": mentions or [],
             "parent_id": parent_id,

@@ -44,6 +44,7 @@ async def send_agent_message(
             channel_name=channel_name,
             content=content,
             mentions=mentions,
+            sender_type="agent",
         )
 
         return {"message_id": msg.id, "channel": channel_name}

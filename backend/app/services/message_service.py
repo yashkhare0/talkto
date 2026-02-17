@@ -25,6 +25,7 @@ async def create_message(
     mentions: list[str] | None = None,
     parent_id: str | None = None,
     commit: bool = True,
+    sender_type: str = "agent",
 ) -> Message:
     """Create a message, persist it, broadcast via WS, and trigger agent invocation.
 
@@ -70,6 +71,7 @@ async def create_message(
             mentions=mentions,
             parent_id=parent_id,
             created_at=now,
+            sender_type=sender_type,
         )
     )
 

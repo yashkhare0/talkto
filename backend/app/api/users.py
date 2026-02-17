@@ -66,6 +66,7 @@ async def _post_creator_welcome(display_name: str, about: str | None) -> None:
                     sender_name=CREATOR_NAME,
                     content=msg.content,
                     created_at=msg.created_at,
+                    sender_type="agent",
                 )
             )
     except Exception:

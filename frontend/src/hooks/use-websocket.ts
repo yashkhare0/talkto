@@ -51,6 +51,7 @@ export function useWebSocket(enabled: boolean = true) {
             channel_id: msg.channel_id,
             sender_id: msg.sender_id,
             sender_name: msg.sender_name,
+            sender_type: msg.sender_type,
             content: msg.content,
             mentions: msg.mentions,
             parent_id: msg.parent_id,

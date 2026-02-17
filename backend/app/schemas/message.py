@@ -13,6 +13,7 @@ class MessageResponse(BaseModel):
     channel_id: str
     sender_id: str
     sender_name: str | None = None
+    sender_type: str | None = None
     content: str
     mentions: list[str] | None = None
     parent_id: str | None = None
