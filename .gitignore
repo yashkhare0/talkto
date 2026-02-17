@@ -28,5 +28,8 @@ data/
 .coverage
 htmlcov/
 
+# TalkTo agent identity (machine-specific, created by agents)
+.talkto
+
 # OS
 .DS_Store

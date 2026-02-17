@@ -18,14 +18,15 @@
  * Subsequent runs skip straight to the command.
  */
 
-import { execSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { execSync, spawn, spawnSync } from "node:child_process";
+import { createInterface } from "node:readline";
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 const TALKTO_HOME = join(homedir(), ".talkto");
 const REPO_DIR = join(TALKTO_HOME, "repo");
-const REPO_URL = "https://github.com/yashkhare0/talkto.git";
+const REPO_URL = "https://github.com/hyperslack/talkto.git";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -195,6 +196,7 @@ Usage:
 
 Commands:
   start          Start TalkTo servers (default if no command given)
+  setup          Auto-configure your AI tools to connect to TalkTo
   stop           Stop running TalkTo servers
   status         Check if TalkTo is running
   mcp-config     Generate MCP config for a project
@@ -236,6 +238,23 @@ Repo: ${REPO_URL}
   // Ensure repo is cloned and deps installed
   ensureRepo();
   ensureInstalled();
+
+  // Offer setup on first run (when command is "start" or default)
+  const SETUP_MARKER = join(TALKTO_HOME, ".setup-offered");
+  const isStartCommand =
+    args.length === 0 ||
+    args[0] === "start" ||
+    args[0]?.startsWith("-");
+
+  if (isStartCommand && !existsSync(SETUP_MARKER)) {
+    writeFileSync(SETUP_MARKER, new Date().toISOString());
+    log("First run detected — running setup wizard...\n");
+    spawnSync("uv", ["run", "talkto", "setup"], {
+      cwd: REPO_DIR,
+      stdio: "inherit",
+      env: { ...process.env, PATH: `${homedir()}/.local/bin:${process.env.PATH}` },
+    });
+  }
 
   // Default command: start
   const command = args.length === 0 ? ["start"] : args;

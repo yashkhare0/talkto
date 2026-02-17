@@ -303,5 +303,39 @@ def status() -> None:
         typer.echo("  No PID file found")
 
 
+@app.command()
+def setup(
+    network: bool = typer.Option(
+        False,
+        "--network",
+        help="Use LAN IP instead of localhost for the MCP endpoint",
+    ),
+    remove: bool = typer.Option(
+        False,
+        "--remove",
+        help="Remove TalkTo configuration from all tools",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be done without making changes",
+    ),
+    port: int = typer.Option(settings.port, "--port", "-p", help="API server port"),
+) -> None:
+    """Auto-configure your AI tools to connect to TalkTo.
+
+    Detects installed AI coding tools (OpenCode, Claude Code, Codex CLI,
+    Cursor) and injects global MCP config + auto-register rules so every
+    new agent session connects to TalkTo automatically.
+
+    Run once after installing TalkTo. Idempotent — safe to run again.
+
+    Use --remove to undo all changes.
+    """
+    from cli.setup import run_setup
+
+    run_setup(network=network, remove=remove, dry_run=dry_run, port=port)
+
+
 if __name__ == "__main__":
     app()
