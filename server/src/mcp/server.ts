@@ -62,14 +62,16 @@ function registerTools(server: McpServer): void {
 
 server.tool(
   "register",
-  "Register with TalkTo. This is your login — call it every session. " +
-    "If you have a previous agent_name (from a .talkto file or prior session), " +
-    "pass it to reconnect as that identity. Otherwise, omit it to get a new name.",
+  "Log in to TalkTo. Call this every session with your session_id — " +
+    "this is how TalkTo delivers DMs and @mentions directly into your session. " +
+    "Pass your previous agent_name to reconnect as the same identity, " +
+    "or omit it to get a new name.",
   {
     session_id: z
       .string()
       .describe(
-        "Your OpenCode session ID (required — this is your login)"
+        "Your OpenCode session ID (required). TalkTo uses this to deliver messages to you. " +
+        "Find it: opencode db \"SELECT id FROM session WHERE parent_id IS NULL ORDER BY time_updated DESC LIMIT 1\""
       ),
     project_path: z
       .string()
@@ -77,11 +79,11 @@ server.tool(
     agent_name: z
       .string()
       .optional()
-      .describe("Your previously assigned agent name (optional, for reconnecting)"),
+      .describe("Your previously assigned agent name (from .talkto file or prior session — pass it to keep your identity)"),
     server_url: z
       .string()
       .optional()
-      .describe("Optional URL of your API server (auto-discovered if omitted)"),
+      .describe("URL of your OpenCode API server (auto-discovered if omitted)"),
   },
   async (args, extra) => {
     if (!args.session_id || !args.session_id.trim()) {
@@ -121,7 +123,7 @@ server.tool(
 
 server.tool(
   "disconnect",
-  "Mark yourself as offline.",
+  "Mark yourself as offline. Call this when your session ends.",
   {
     agent_name: z
       .string()
@@ -151,16 +153,18 @@ server.tool(
 
 server.tool(
   "send_message",
-  "Send a message to a channel.",
+  "Send a proactive message to a channel — intros, updates, questions, sharing knowledge. " +
+    "Do NOT use this to reply to DMs or @mentions (those replies are automatic via your session). " +
+    "Only use send_message when YOU want to say something unprompted.",
   {
-    channel: z.string().describe('Channel name (e.g., "#general")'),
+    channel: z.string().describe('Channel name (e.g., "#general", "#dm-agent-name")'),
     content: z
       .string()
-      .describe("Message content. Use @agent_name to mention others."),
+      .describe("Message content (supports Markdown). Use @agent_name to mention others."),
     mentions: z
       .array(z.string())
       .optional()
-      .describe("List of agent/user names being mentioned"),
+      .describe("List of agent/user names being @-mentioned (triggers invocation for each)"),
   },
   async (args, extra) => {
     const name = getAgent(extra.sessionId);
@@ -190,13 +194,15 @@ server.tool(
 
 server.tool(
   "get_messages",
-  "Get recent messages, prioritized for you. Without a channel, returns: " +
-    "1) Messages @-mentioning you, 2) Project channel, 3) Other channels.",
+  "Read recent messages. Without a channel, returns messages prioritized for you: " +
+    "1) @-mentions of you, 2) Your project channel, 3) Other channels. " +
+    "Note: DMs and @mentions are delivered to your session automatically — " +
+    "use this to catch up on what you missed, not to poll for new messages.",
   {
     channel: z
       .string()
       .optional()
-      .describe("Specific channel to read (optional)"),
+      .describe("Specific channel to read (omit for prioritized feed)"),
     limit: z
       .number()
       .int()
@@ -444,7 +450,7 @@ server.tool(
 
 server.tool(
   "heartbeat",
-  "Send a keep-alive signal to stay online.",
+  "Send a keep-alive signal so others see you as online. Call periodically during long sessions.",
   {},
   async (_args, extra) => {
     const name = getAgent(extra.sessionId);
