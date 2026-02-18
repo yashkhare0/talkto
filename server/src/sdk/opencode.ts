@@ -457,25 +457,28 @@ export function extractTextFromParts(parts: Part[]): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Check if a TUI is active for a given server/project.
+ * Check if a TUI is active for a specific agent's project directory.
  *
  * The OpenCode API doesn't have a direct "is TUI connected?" field.
- * We use a heuristic: attempt to clear and immediately re-clear the prompt.
- * If the TUI is not connected, the call fails with an error.
+ * We use a heuristic: attempt to clear the prompt for the given directory.
+ * If no TUI is connected for that directory, the call fails with an error.
+ *
+ * The `directory` parameter scopes the check to the TUI connected for
+ * that project — if multiple agents share the same OpenCode server, only
+ * the TUI for the matching directory will respond.
  *
  * This is a lightweight check — clearPrompt is a no-op if prompt is empty.
- *
- * KNOWN LIMITATION: This check is server-wide, not session-scoped. If
- * multiple agents share the same OpenCode server (common in multi-project
- * setups), this returns true when ANY TUI is connected, not necessarily
- * the target agent's TUI. The TUI prompt will go to whichever project's
- * TUI is currently connected.
  */
-export async function isTuiActive(serverUrl: string): Promise<boolean> {
+export async function isTuiActive(
+  serverUrl: string,
+  directory?: string
+): Promise<boolean> {
   try {
     const client = getClient(serverUrl);
-    // clearPrompt succeeds only if a TUI is connected
-    const result = await client.tui.clearPrompt();
+    // clearPrompt succeeds only if a TUI is connected for this directory
+    const result = await client.tui.clearPrompt({
+      query: directory ? { directory } : undefined,
+    });
     return result.data === true;
   } catch {
     return false;
@@ -487,19 +490,27 @@ export async function isTuiActive(serverUrl: string): Promise<boolean> {
  * Used for active TUI sessions where we want the agent to see the
  * message naturally in their terminal.
  *
+ * The `directory` parameter scopes the operation to the TUI connected
+ * for that project, preventing cross-agent interference on shared servers.
+ *
  * Returns true if both operations succeeded.
  */
 export async function tuiPrompt(
   serverUrl: string,
-  text: string
+  text: string,
+  directory?: string
 ): Promise<boolean> {
   try {
     const client = getClient(serverUrl);
+    const dirQuery = directory ? { directory } : undefined;
     // Clear any existing text first to prevent concatenation
-    await client.tui.clearPrompt();
-    const appendResult = await client.tui.appendPrompt({ body: { text } });
+    await client.tui.clearPrompt({ query: dirQuery });
+    const appendResult = await client.tui.appendPrompt({
+      body: { text },
+      query: dirQuery,
+    });
     if (!appendResult.data) return false;
-    const submitResult = await client.tui.submitPrompt();
+    const submitResult = await client.tui.submitPrompt({ query: dirQuery });
     return submitResult.data === true;
   } catch (err) {
     console.error("[OPENCODE] TUI prompt failed:", err);
@@ -510,16 +521,21 @@ export async function tuiPrompt(
 /**
  * Show a toast notification in the TUI.
  * Useful for telling an agent they've been mentioned or received a DM.
+ *
+ * The `directory` parameter scopes the toast to the TUI connected for
+ * that project — only the matching agent's terminal will see it.
  */
 export async function tuiToast(
   serverUrl: string,
   message: string,
-  variant: "info" | "success" | "warning" | "error" = "info"
+  variant: "info" | "success" | "warning" | "error" = "info",
+  directory?: string
 ): Promise<boolean> {
   try {
     const client = getClient(serverUrl);
     const result = await client.tui.showToast({
       body: { message, variant, duration: 5000 },
+      query: directory ? { directory } : undefined,
     });
     return result.data === true;
   } catch {
@@ -563,7 +579,8 @@ export async function promptViaTui(
     onComplete?: () => void;
     onError?: (error: string) => void;
   } = {},
-  timeoutMs: number = PROMPT_TIMEOUT_MS
+  timeoutMs: number = PROMPT_TIMEOUT_MS,
+  directory?: string
 ): Promise<{ text: string; cost: number; tokens: { input: number; output: number } } | null> {
   // Subscribe to SSE BEFORE sending the prompt so we don't miss early events
   let eventStream: AsyncGenerator<OpenCodeEvent, void, unknown> | null = null;
@@ -646,9 +663,9 @@ export async function promptViaTui(
       }
     })();
 
-    // Send the prompt via TUI
-    console.log(`[OPENCODE] Sending prompt via TUI for session ${sessionId}`);
-    const tuiSuccess = await tuiPrompt(serverUrl, text);
+    // Send the prompt via TUI (scoped to agent's project directory)
+    console.log(`[OPENCODE] Sending prompt via TUI for session ${sessionId}${directory ? ` (dir: ${directory})` : ""}`);
+    const tuiSuccess = await tuiPrompt(serverUrl, text, directory);
 
     if (!tuiSuccess) {
       // TUI failed (disconnected?) — clean up and fall back to session.prompt()

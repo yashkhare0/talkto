@@ -199,11 +199,10 @@ async function invokeAgent(
       },
     };
 
-    // Detect TUI and choose invocation path
-    // NOTE: isTuiActive() is server-wide — if multiple agents share the same
-    // OpenCode server, this may detect another agent's TUI as active. The
-    // TUI prompt will go to whichever project's TUI is connected.
-    const tuiActive = await isTuiActive(info.serverUrl);
+    // Detect TUI for this specific agent's project directory.
+    // The directory parameter scopes the check to the correct TUI when
+    // multiple agents share the same OpenCode server.
+    const tuiActive = await isTuiActive(info.serverUrl, info.projectPath);
     let result: { text: string; cost: number; tokens: { input: number; output: number } } | null;
 
     if (tuiActive) {
@@ -212,11 +211,11 @@ async function invokeAgent(
         ? `DM from ${channelName.replace("#dm-", "")}`
         : `@mention in ${channelName}`;
       console.log(
-        `[INVOKE] TUI active for '${agentName}' — using TUI invocation path`
+        `[INVOKE] TUI active for '${agentName}' (dir: ${info.projectPath}) — using TUI invocation path`
       );
 
-      // Toast notification so the agent knows a message arrived
-      tuiToast(info.serverUrl, `[TalkTo] ${tuiContext}`, "info").catch(() => {});
+      // Toast notification so the agent knows a message arrived (scoped to their TUI)
+      tuiToast(info.serverUrl, `[TalkTo] ${tuiContext}`, "info", info.projectPath).catch(() => {});
 
       // Send via TUI + capture response from SSE deltas
       // Falls back to session.prompt() internally if TUI disconnects mid-invocation
@@ -224,7 +223,9 @@ async function invokeAgent(
         info.serverUrl,
         info.sessionId,
         prompt,
-        callbacks
+        callbacks,
+        undefined, // timeoutMs — use default
+        info.projectPath
       );
     } else {
       // Standard path — session.prompt() with SSE event callbacks

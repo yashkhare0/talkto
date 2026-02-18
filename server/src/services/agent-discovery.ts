@@ -63,6 +63,7 @@ export function discoverOpenCodeServer(): string | null {
 export interface InvocationInfo {
   serverUrl: string;
   sessionId: string;
+  projectPath: string;
 }
 
 /**
@@ -107,7 +108,7 @@ export async function getAgentInvocationInfo(
       console.log(
         `[DISCOVERY] '${agentName}' is alive: server=${serverUrl} session=${sessionId}`
       );
-      return { serverUrl, sessionId };
+      return { serverUrl, sessionId, projectPath: agent.projectPath };
     }
 
     // Session is dead — clear stale credentials
@@ -182,7 +183,7 @@ export async function getAgentInvocationInfo(
     `[DISCOVERY] Auto-discovered for '${agentName}': server=${serverUrl} session=${sessionId} (persisted)`
   );
 
-  return { serverUrl, sessionId };
+  return { serverUrl, sessionId, projectPath: agent.projectPath };
 }
 
 /**
