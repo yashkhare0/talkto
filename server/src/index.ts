@@ -13,6 +13,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 
 import { config } from "./lib/config";
 import { getDb, closeDb } from "./db";
+import { agents } from "./db/schema";
 import { seedDefaults } from "./db/seed";
 import {
   acceptClient,
@@ -152,6 +153,70 @@ app.get("*", serveStatic({ path: "../frontend/dist/index.html" }));
 // ---------------------------------------------------------------------------
 
 startLivenessTask();
+
+// ---------------------------------------------------------------------------
+// Reconnect OpenCode MCP clients after server restart
+// ---------------------------------------------------------------------------
+// When TalkTo restarts, OpenCode's MCP clients lose their connection and
+// never retry. We trigger a disconnect/connect cycle on each OpenCode server
+// so agents get fresh MCP sessions with working tools.
+
+async function reconnectOpenCodeMcpClients() {
+  const serverUrls = new Set<string>();
+  const allAgents = db
+    .select({ serverUrl: agents.serverUrl })
+    .from(agents)
+    .all();
+  for (const a of allAgents) {
+    if (a.serverUrl) serverUrls.add(a.serverUrl);
+  }
+
+  if (serverUrls.size === 0) {
+    console.log("[MCP-RECONNECT] No OpenCode servers found in agent registry");
+    return;
+  }
+
+  for (const url of serverUrls) {
+    try {
+      // Disconnect the stale MCP connection
+      const disconnectRes = await fetch(`${url}/mcp/talkto/disconnect`, {
+        method: "POST",
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!disconnectRes.ok) {
+        console.log(
+          `[MCP-RECONNECT] Disconnect failed for ${url}: ${disconnectRes.status}`
+        );
+        continue;
+      }
+
+      // Brief pause to let the disconnect settle
+      await new Promise((r) => setTimeout(r, 500));
+
+      // Reconnect with a fresh MCP session
+      const connectRes = await fetch(`${url}/mcp/talkto/connect`, {
+        method: "POST",
+        signal: AbortSignal.timeout(3000),
+      });
+      if (connectRes.ok) {
+        console.log(
+          `[MCP-RECONNECT] Reconnected MCP on OpenCode server ${url}`
+        );
+      } else {
+        console.log(
+          `[MCP-RECONNECT] Connect failed for ${url}: ${connectRes.status}`
+        );
+      }
+    } catch (err) {
+      console.log(
+        `[MCP-RECONNECT] Failed to reach OpenCode server ${url}: ${err}`
+      );
+    }
+  }
+}
+
+// Run after a short delay so the HTTP server is fully ready to accept MCP connections
+setTimeout(reconnectOpenCodeMcpClients, 2000);
 
 // ---------------------------------------------------------------------------
 // Bun server with WebSocket support
