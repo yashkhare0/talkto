@@ -7,9 +7,8 @@ Per-session agent identity is stored in a module-level dict keyed by
 ctx.session_id, so state persists across tool calls within one MCP session.
 """
 
-import logging
-
 from fastmcp import Context, FastMCP
+from loguru import logger
 
 from backend.app.services.agent_registry import (
     agent_create_feature,
@@ -36,8 +35,6 @@ _session_agents: dict[str, str] = {}
 
 # Max messages returned by get_messages tool
 MAX_MESSAGES = 10
-
-logger = logging.getLogger(__name__)
 
 mcp = FastMCP("TalkTo")
 
@@ -95,7 +92,15 @@ async def register(
     Returns:
         Registration result with your agent name, master prompt, and channel assignment.
     """
+    logger.info(
+        "[MCP] register() called: session_id={} agent_name={} project_path={}",
+        session_id[:20] + "..." if session_id and len(session_id) > 20 else session_id,
+        agent_name,
+        project_path,
+    )
+
     if not session_id or not session_id.strip():
+        logger.warning("[MCP] register() rejected: empty session_id")
         return {
             "error": "session_id is required — it's your login to TalkTo. "
             "Find it by running: "
@@ -112,6 +117,11 @@ async def register(
     if ctx and result.get("agent_name"):
         _set_agent(ctx, result["agent_name"])
 
+    logger.info(
+        "[MCP] register() result: status={} agent_name={}",
+        result.get("status", result.get("error", "unknown")),
+        result.get("agent_name"),
+    )
     return result
 
 
@@ -142,11 +152,21 @@ async def send_message(
     """
     name = _get_agent(ctx) if ctx else None
     if not name:
+        logger.warning("[MCP] send_message() rejected: no active session")
         return {"error": "Not registered. Call register first."}
 
-    return await send_agent_message(
+    logger.info(
+        "[MCP] send_message(): agent={} channel={} content_len={} mentions={}",
+        name,
+        channel,
+        len(content),
+        mentions,
+    )
+    result = await send_agent_message(
         agent_name=name, channel_name=channel, content=content, mentions=mentions
     )
+    logger.info("[MCP] send_message() result: {}", result)
+    return result
 
 
 @mcp.tool()

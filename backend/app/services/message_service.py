@@ -1,17 +1,15 @@
 """Shared message service — single place for creating, persisting, broadcasting, and invoking."""
 
 import json
-import logging
 import uuid
 from datetime import UTC, datetime
 
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.models.message import Message
 from backend.app.services.agent_invoker import invoke_for_message, spawn_background_task
 from backend.app.services.broadcaster import broadcast_event, new_message_event
-
-logger = logging.getLogger(__name__)
 
 
 async def create_message(
@@ -60,6 +58,14 @@ async def create_message(
     if commit:
         await db.commit()
 
+    logger.info(
+        "[MSG] Persisted message: id={} channel={} sender={} content_len={}",
+        msg.id,
+        channel_name,
+        sender_name,
+        len(content),
+    )
+
     # Broadcast to WebSocket clients
     await broadcast_event(
         new_message_event(
@@ -88,6 +94,11 @@ async def create_message(
         except Exception:
             logger.exception("[INVOKE] Unhandled error in fire-and-forget invocation task")
 
+    logger.debug(
+        "[MSG] Spawning invocation task for message {} (mentions={})",
+        msg.id,
+        mentions,
+    )
     spawn_background_task(_invoke())
 
     return msg

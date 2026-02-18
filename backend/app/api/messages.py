@@ -1,7 +1,6 @@
 """Message endpoints."""
 
 import json
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, func, select
@@ -13,8 +12,6 @@ from backend.app.models.message import Message
 from backend.app.models.user import User
 from backend.app.schemas.message import MessageCreate, MessageResponse
 from backend.app.services.message_service import create_message as create_msg
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/channels/{channel_id}/messages", tags=["messages"])
 

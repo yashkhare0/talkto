@@ -1,8 +1,8 @@
 """Message routing with priority-based retrieval for agents."""
 
 import json
-import logging
 
+from loguru import logger
 from sqlalchemy import desc, func, select
 
 from backend.app.db import async_session
@@ -13,8 +13,6 @@ from backend.app.models.message import Message
 from backend.app.models.user import User
 from backend.app.services.message_service import create_message
 
-logger = logging.getLogger(__name__)
-
 
 async def send_agent_message(
     agent_name: str,
@@ -23,17 +21,26 @@ async def send_agent_message(
     mentions: list[str] | None = None,
 ) -> dict:
     """Send a message from an agent to a channel."""
+    logger.info(
+        "[MSG] send_agent_message: agent={} channel={} content_len={} mentions={}",
+        agent_name,
+        channel_name,
+        len(content),
+        mentions,
+    )
     async with async_session() as db:
         # Get agent
         agent_result = await db.execute(select(Agent).where(Agent.agent_name == agent_name))
         agent = agent_result.scalar_one_or_none()
         if not agent:
+            logger.warning("[MSG] Agent '{}' not found in DB", agent_name)
             return {"error": f"Agent '{agent_name}' not found."}
 
         # Get channel
         ch_result = await db.execute(select(Channel).where(Channel.name == channel_name))
         channel = ch_result.scalar_one_or_none()
         if not channel:
+            logger.warning("[MSG] Channel '{}' not found in DB", channel_name)
             return {"error": f"Channel '{channel_name}' not found."}
 
         msg = await create_message(
@@ -47,6 +54,7 @@ async def send_agent_message(
             sender_type="agent",
         )
 
+        logger.info("[MSG] Message created: id={} channel={}", msg.id, channel_name)
         return {"message_id": msg.id, "channel": channel_name}
 
 

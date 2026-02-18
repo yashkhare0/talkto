@@ -1,10 +1,10 @@
 """Agent registration and session management."""
 
-import logging
 import os
 import uuid
 from datetime import UTC, datetime
 
+from loguru import logger
 from sqlalchemy import func, select, update
 
 from backend.app.db import async_session
@@ -23,8 +23,6 @@ from backend.app.services.broadcaster import (
 )
 from backend.app.services.name_generator import generate_unique_name
 from backend.app.services.prompt_engine import prompt_engine
-
-logger = logging.getLogger(__name__)
 
 
 async def _derive_project_name(project_path: str) -> str:
@@ -73,6 +71,12 @@ async def register_or_connect_agent(
     The ``agent_type`` is always set to ``"opencode"`` — all agents run
     inside OpenCode and the type is determined server-side.
     """
+    logger.info(
+        "[REG] register_or_connect_agent: session_id={} agent_name={} project_path={}",
+        session_id,
+        agent_name,
+        project_path,
+    )
     agent_type = "opencode"
 
     # Auto-discover server_url if not provided
@@ -91,7 +95,9 @@ async def register_or_connect_agent(
             result = await db.execute(select(Agent).where(Agent.agent_name == agent_name))
             agent = result.scalar_one_or_none()
             if agent:
+                logger.info("[REG] Reconnecting existing agent '{}'", agent_name)
                 return await _reconnect_agent(db, agent, session_id, server_url, project_path)
+        logger.info("[REG] Agent name '{}' not found — creating new agent", agent_name)
         # Agent name was provided but doesn't exist — fall through to create new
 
     # --- New registration path ---
@@ -111,6 +117,12 @@ async def _reconnect_agent(
     project_path: str,
 ) -> dict:
     """Reconnect an existing agent with a new session_id."""
+    logger.info(
+        "[REG] _reconnect_agent: name={} session_id={} server_url={}",
+        agent.agent_name,
+        session_id,
+        server_url,
+    )
     # Update invocation fields
     if server_url:
         agent.server_url = server_url
@@ -166,6 +178,7 @@ async def _reconnect_agent(
     if agent.gender:
         profile["gender"] = agent.gender
 
+    logger.info("[REG] Reconnect complete: agent={} channel={}", agent.agent_name, channel_name)
     return {
         "status": "connected",
         "agent_name": agent.agent_name,
@@ -183,6 +196,7 @@ async def _create_new_agent(
     server_url: str | None,
 ) -> dict:
     """Create a brand new agent identity."""
+    logger.info("[REG] Creating new agent: session_id={} project_path={}", session_id, project_path)
     now = datetime.now(UTC).isoformat()
     project_name = await _derive_project_name(project_path)
     channel_name = _make_channel_name(project_name)
@@ -283,6 +297,12 @@ async def _create_new_agent(
             project_channel=channel_name,
         )
 
+        logger.info(
+            "[REG] New agent created: name={} channel={} type={}",
+            agent_name,
+            channel_name,
+            agent_type,
+        )
         return {
             "agent_name": agent_name,
             "master_prompt": master_prompt,

@@ -7,12 +7,10 @@ Clients can subscribe to specific channels to only receive relevant messages.
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass, field
 
+from loguru import logger
 from starlette.websockets import WebSocket, WebSocketState
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass

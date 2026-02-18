@@ -10,10 +10,9 @@ without needing to know which process it's running in.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # Flag set by FastAPI app on startup to indicate we're in the API process
 _is_api_process = False
@@ -66,7 +65,7 @@ async def _broadcast_via_http(event: dict[str, Any]) -> None:
                 logger.warning("Broadcast HTTP failed: %s %s", resp.status_code, resp.text)
     except httpx.ConnectError:
         # FastAPI server might not be running (e.g., MCP-only mode)
-        logger.debug("Cannot reach FastAPI for broadcast — server may not be running")
+        logger.warning("Cannot reach FastAPI for broadcast — server may not be running")
     except Exception:
         logger.exception("Failed to broadcast event via HTTP")
 

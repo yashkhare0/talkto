@@ -1,13 +1,11 @@
-import logging
 from datetime import UTC
 
+from loguru import logger
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from backend.app.config import DATA_DIR, DATABASE_URL
-
-logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):

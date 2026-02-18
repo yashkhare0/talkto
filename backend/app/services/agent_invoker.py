@@ -15,18 +15,16 @@ sending prompts to it.
 """
 
 import asyncio
-import logging
 import os
 
 import httpx
+from loguru import logger
 from sqlalchemy import select
 
 from backend.app.db import async_session
 from backend.app.models.agent import Agent
 from backend.app.models.session import Session as AgentSession
 from backend.app.services.agent_discovery import auto_discover
-
-logger = logging.getLogger(__name__)
 
 # Timeout for synchronous invocation (agent processes the message and responds)
 _INVOKE_TIMEOUT = 120.0  # seconds — AI responses can be slow
@@ -498,9 +496,11 @@ async def _fetch_recent_context(channel_id: str, limit: int = 5) -> str:
         rows = list(result.all())
 
     if not rows:
+        logger.debug("[INVOKE] No recent context found for channel {}", channel_id)
         return ""
 
     rows.reverse()
+    logger.debug("[INVOKE] Fetched {} context messages for channel {}", len(rows), channel_id)
     return "\n".join(f"  {name}: {msg.content}" for msg, name in rows)
 
 

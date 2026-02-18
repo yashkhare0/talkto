@@ -10,14 +10,12 @@ Discovery strategies (in priority order):
 """
 
 import asyncio
-import logging
 import re
 import sqlite3
 from pathlib import Path
 
 import httpx
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # OpenCode stores its DB here
 _OPENCODE_DB_PATH = Path.home() / ".local" / "share" / "opencode" / "opencode.db"

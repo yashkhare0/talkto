@@ -1,12 +1,12 @@
 """Agent listing and DM endpoints (for UI)."""
 
 import asyncio
-import logging
 import uuid
 from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,8 +19,6 @@ from backend.app.models.user import User
 from backend.app.schemas.agent import AgentResponse
 from backend.app.schemas.channel import ChannelResponse
 from backend.app.services.agent_invoker import is_pid_alive
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 

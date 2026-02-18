@@ -1,10 +1,10 @@
 """User onboarding & profile endpoints."""
 
-import logging
 import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,8 +16,6 @@ from backend.app.schemas.user import UserOnboard, UserResponse
 from backend.app.services.agent_invoker import spawn_background_task
 from backend.app.services.broadcaster import broadcast_event, new_message_event
 from backend.app.services.name_generator import CREATOR_NAME
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["users"])
 

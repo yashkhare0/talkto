@@ -17,14 +17,13 @@ Protocol:
     {"type": "pong"}
     {"type": "error", "data": {"message": "..."}}
 """
+
 import json
-import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from loguru import logger
 
 from backend.app.services.ws_manager import ws_manager
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -40,10 +39,14 @@ async def websocket_endpoint(ws: WebSocket) -> None:
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
-                await ws.send_text(json.dumps({
-                    "type": "error",
-                    "data": {"message": "Invalid JSON"},
-                }))
+                await ws.send_text(
+                    json.dumps(
+                        {
+                            "type": "error",
+                            "data": {"message": "Invalid JSON"},
+                        }
+                    )
+                )
                 continue
 
             action = msg.get("action", "")
@@ -52,28 +55,40 @@ async def websocket_endpoint(ws: WebSocket) -> None:
                 channel_ids = msg.get("channel_ids", [])
                 if isinstance(channel_ids, list):
                     ws_manager.subscribe(ws, channel_ids)
-                    await ws.send_text(json.dumps({
-                        "type": "subscribed",
-                        "data": {"channel_ids": channel_ids},
-                    }))
+                    await ws.send_text(
+                        json.dumps(
+                            {
+                                "type": "subscribed",
+                                "data": {"channel_ids": channel_ids},
+                            }
+                        )
+                    )
 
             elif action == "unsubscribe":
                 channel_ids = msg.get("channel_ids", [])
                 if isinstance(channel_ids, list):
                     ws_manager.unsubscribe(ws, channel_ids)
-                    await ws.send_text(json.dumps({
-                        "type": "unsubscribed",
-                        "data": {"channel_ids": channel_ids},
-                    }))
+                    await ws.send_text(
+                        json.dumps(
+                            {
+                                "type": "unsubscribed",
+                                "data": {"channel_ids": channel_ids},
+                            }
+                        )
+                    )
 
             elif action == "ping":
                 await ws.send_text(json.dumps({"type": "pong"}))
 
             else:
-                await ws.send_text(json.dumps({
-                    "type": "error",
-                    "data": {"message": f"Unknown action: {action}"},
-                }))
+                await ws.send_text(
+                    json.dumps(
+                        {
+                            "type": "error",
+                            "data": {"message": f"Unknown action: {action}"},
+                        }
+                    )
+                )
 
     except WebSocketDisconnect:
         logger.info("WS client %s disconnected normally", conn_id)

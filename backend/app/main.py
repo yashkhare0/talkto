@@ -1,41 +1,104 @@
 """FastAPI application — the main entrypoint for TalkTo."""
 
 import logging
+import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text
-from starlette.routing import Route
-from starlette.types import Receive, Scope, Send
+from loguru import logger
 
-from backend.app.api.agents import router as agents_router
-from backend.app.api.agents import start_liveness_task, stop_liveness_task
-from backend.app.api.channels import router as channels_router
-from backend.app.api.features import router as features_router
-from backend.app.api.internal import router as internal_router
-from backend.app.api.messages import router as messages_router
-from backend.app.api.users import router as users_router
-from backend.app.api.ws import router as ws_router
 from backend.app.config import settings
-from backend.app.db import engine, init_db
-from backend.app.services.broadcaster import mark_as_api_process
-from backend.app.services.ws_manager import ws_manager
-from backend.mcp_server import mcp as mcp_server
 
-logger = logging.getLogger(__name__)
+# ---------------------------------------------------------------------------
+# Loguru setup — single source of truth for all logging.
+# ---------------------------------------------------------------------------
 
-# Configure logging for our app modules so INFO/DEBUG logs are visible.
-# Uvicorn's log_level="info" only affects its own logger, not ours.
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
-    format="%(levelname)s:%(name)s: %(message)s",
-)
-logging.getLogger("backend").setLevel(logging.DEBUG)
+
+class _InterceptHandler(logging.Handler):
+    """Bridge stdlib logging → loguru so uvicorn/alembic/sqlalchemy logs flow through."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        # Map stdlib level to loguru level name
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno  # type: ignore[assignment]
+
+        # Find the caller frame that originated the log call
+        frame, depth = logging.currentframe(), 2
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
+
+def _setup_logging() -> None:
+    """Configure loguru as the single logging backend."""
+    # Remove default stderr handler
+    logger.remove()
+
+    # Console handler — colorized, concise
+    log_level = settings.log_level.upper()
+    logger.add(
+        sys.stderr,
+        level=log_level,
+        format=(
+            "<green>{time:HH:mm:ss}</green> | "
+            "<level>{level:<7}</level> | "
+            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
+            "<level>{message}</level>"
+        ),
+        colorize=True,
+    )
+
+    # File handler — for post-mortem debugging
+    log_dir = settings.data_dir
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logger.add(
+        str(log_dir / "talkto.log"),
+        level="DEBUG",
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<7} | {name}:{function}:{line} | {message}",
+        rotation="10 MB",
+        retention=3,
+        encoding="utf-8",
+    )
+
+    # Intercept all stdlib logging → loguru
+    logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
+
+    # Quieten noisy third-party loggers
+    for noisy in ("httpcore", "httpx", "websockets", "aiosqlite"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+_setup_logging()
+
+# ---------------------------------------------------------------------------
+# Now import everything else (after logging is configured)
+# ---------------------------------------------------------------------------
+
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+from starlette.routing import Route  # noqa: E402
+from starlette.types import Receive, Scope, Send  # noqa: E402
+
+from backend.app.api.agents import router as agents_router  # noqa: E402
+from backend.app.api.agents import start_liveness_task, stop_liveness_task  # noqa: E402
+from backend.app.api.channels import router as channels_router  # noqa: E402
+from backend.app.api.features import router as features_router  # noqa: E402
+from backend.app.api.internal import router as internal_router  # noqa: E402
+from backend.app.api.messages import router as messages_router  # noqa: E402
+from backend.app.api.users import router as users_router  # noqa: E402
+from backend.app.api.ws import router as ws_router  # noqa: E402
+from backend.app.db import engine, init_db  # noqa: E402
+from backend.app.services.broadcaster import mark_as_api_process  # noqa: E402
+from backend.app.services.ws_manager import ws_manager  # noqa: E402
+from backend.mcp_server import mcp as mcp_server  # noqa: E402
 
 # Create the MCP Starlette app once (needed for lifespan composition)
 # path="/" means the MCP endpoint is at the root of this Starlette sub-app,
