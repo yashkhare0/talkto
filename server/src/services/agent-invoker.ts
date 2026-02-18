@@ -7,6 +7,11 @@
  * - Agents never need the send_message MCP tool for replies (only for proactive messages)
  * - Text deltas stream to the frontend via agent_streaming WebSocket events
  *
+ * Agent-to-agent chaining:
+ * - When an agent's response contains @mentions, those agents are automatically invoked
+ * - Chain depth is tracked and capped at MAX_CHAIN_DEPTH to prevent infinite loops
+ * - Each chained invocation includes recent channel context so agents see the conversation
+ *
  * DMs: prompt with just the message — the agent's own session has its context
  * @mentions: prompt with last 5 channel messages as context
  *
@@ -27,6 +32,54 @@ import {
   promptSessionWithEvents,
   isSessionBusy,
 } from "../sdk/opencode";
+
+// Maximum depth for agent-to-agent invocation chains.
+// Prevents infinite loops when agents keep @mentioning each other.
+const MAX_CHAIN_DEPTH = 5;
+
+// ---------------------------------------------------------------------------
+// @mention extraction from raw text
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract @mentions from message text and validate them against registered agents.
+ *
+ * Matches patterns like @spicy-bat, @silly-narwhal, @the_creator.
+ * Only returns names that correspond to actual registered agents.
+ * Excludes the sender to prevent self-invocation.
+ */
+function extractMentionsFromText(text: string, excludeSender?: string): string[] {
+  // Match @word patterns (agent names are adjective-animal with hyphens/underscores)
+  const mentionPattern = /@([\w-]+)/g;
+  const mentioned = new Set<string>();
+  let match;
+
+  while ((match = mentionPattern.exec(text)) !== null) {
+    const name = match[1];
+    if (name !== excludeSender) {
+      mentioned.add(name);
+    }
+  }
+
+  if (mentioned.size === 0) return [];
+
+  // Validate against registered agents
+  const db = getDb();
+  const validAgents: string[] = [];
+
+  for (const name of mentioned) {
+    const agent = db
+      .select({ agentName: agents.agentName })
+      .from(agents)
+      .where(eq(agents.agentName, name))
+      .get();
+    if (agent) {
+      validAgents.push(agent.agentName);
+    }
+  }
+
+  return validAgents;
+}
 
 // ---------------------------------------------------------------------------
 // Background task tracking — prevents GC of fire-and-forget promises
@@ -56,16 +109,27 @@ function spawnBackgroundTask(fn: () => Promise<void>): void {
  * - DM channel (#dm-{agent_name}): invoke the target agent directly
  * - @mentions: invoke each mentioned agent with channel context
  * - Never invokes the sender (prevents self-invocation loops)
+ * - Chain depth tracked to prevent infinite agent-to-agent loops
+ *
+ * @param depth - Current chain depth (0 = human-initiated, 1+ = agent-chained)
  */
 export function invokeForMessage(
   senderName: string,
   channelId: string,
   channelName: string,
   content: string,
-  mentions: string[] | null
+  mentions: string[] | null,
+  depth: number = 0
 ): void {
+  if (depth >= MAX_CHAIN_DEPTH) {
+    console.log(
+      `[INVOKE] Chain depth ${depth} reached max ${MAX_CHAIN_DEPTH} — stopping chain`
+    );
+    return;
+  }
+
   spawnBackgroundTask(async () => {
-    await _invokeForMessage(senderName, channelId, channelName, content, mentions);
+    await _invokeForMessage(senderName, channelId, channelName, content, mentions, depth);
   });
 }
 
@@ -74,10 +138,11 @@ async function _invokeForMessage(
   channelId: string,
   channelName: string,
   content: string,
-  mentions: string[] | null
+  mentions: string[] | null,
+  depth: number
 ): Promise<void> {
   console.log(
-    `[INVOKE] Starting: sender=${senderName} channel=${channelName} mentions=${JSON.stringify(mentions)}`
+    `[INVOKE] Starting: sender=${senderName} channel=${channelName} mentions=${JSON.stringify(mentions)} depth=${depth}`
   );
   const invoked = new Set<string>();
 
@@ -87,7 +152,7 @@ async function _invokeForMessage(
     if (target === senderName) {
       console.log(`[INVOKE] Skipping self-invocation for '${target}'`);
     } else {
-      await invokeAgent(target, channelId, channelName, content, /* isDm */ true);
+      await invokeAgent(target, channelId, channelName, content, /* isDm */ true, depth);
       invoked.add(target);
     }
   }
@@ -107,7 +172,7 @@ async function _invokeForMessage(
           content,
           context
         );
-        await invokeAgent(mentioned, channelId, channelName, prompt, /* isDm */ false);
+        await invokeAgent(mentioned, channelId, channelName, prompt, /* isDm */ false, depth);
         invoked.add(mentioned);
       });
 
@@ -115,7 +180,7 @@ async function _invokeForMessage(
   }
 
   console.log(
-    `[INVOKE] Complete. Invoked agents: ${invoked.size > 0 ? [...invoked].join(", ") : "none"}`
+    `[INVOKE] Complete. Invoked agents: ${invoked.size > 0 ? [...invoked].join(", ") : "none"} (depth=${depth})`
   );
 }
 
@@ -151,7 +216,8 @@ async function invokeAgent(
   channelId: string,
   channelName: string,
   prompt: string,
-  isDm: boolean
+  isDm: boolean,
+  depth: number = 0
 ): Promise<void> {
   console.log(
     `[INVOKE] Invoking '${agentName}' in ${channelName} (${isDm ? "DM" : "@mention"})`
@@ -216,7 +282,8 @@ async function invokeAgent(
     );
 
     // Post the agent's response as a message in the channel
-    postAgentResponse(agentName, channelId, channelName, result.text);
+    // Also triggers agent-to-agent chaining if the response contains @mentions
+    postAgentResponse(agentName, channelId, channelName, result.text, depth);
 
     // Broadcast typing stop (success)
     broadcastEvent(agentTypingEvent(agentName, channelId, false));
@@ -235,12 +302,16 @@ async function invokeAgent(
 /**
  * Create a message in a channel as an agent and broadcast it.
  * This is how SDK-native responses get posted to TalkTo.
+ *
+ * Also handles agent-to-agent chaining: if the response contains @mentions
+ * of other agents, those agents are automatically invoked (up to MAX_CHAIN_DEPTH).
  */
 function postAgentResponse(
   agentName: string,
   channelId: string,
   channelName: string,
-  content: string
+  content: string,
+  depth: number = 0
 ): void {
   const db = getDb();
 
@@ -255,6 +326,10 @@ function postAgentResponse(
     return;
   }
 
+  // Extract @mentions from the response text
+  const mentionedAgents = extractMentionsFromText(content, agentName);
+  const mentionsJson = mentionedAgents.length > 0 ? JSON.stringify(mentionedAgents) : null;
+
   const msgId = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -264,6 +339,7 @@ function postAgentResponse(
       channelId,
       senderId: agent.id,
       content,
+      mentions: mentionsJson,
       createdAt: now,
     })
     .run();
@@ -276,14 +352,27 @@ function postAgentResponse(
       senderId: agent.id,
       senderName: agentName,
       content,
+      mentions: mentionedAgents.length > 0 ? mentionedAgents : null,
       createdAt: now,
       senderType: "agent",
     })
   );
 
   console.log(
-    `[INVOKE] Posted response from '${agentName}' to ${channelName} (${content.length} chars)`
+    `[INVOKE] Posted response from '${agentName}' to ${channelName} (${content.length} chars, mentions: ${mentionedAgents.length > 0 ? mentionedAgents.join(", ") : "none"})`
   );
+
+  // Agent-to-agent chaining: if the response @mentions other agents, invoke them
+  if (mentionedAgents.length > 0 && depth + 1 < MAX_CHAIN_DEPTH) {
+    console.log(
+      `[INVOKE] Agent-to-agent chain: '${agentName}' mentioned ${mentionedAgents.join(", ")} (depth ${depth} → ${depth + 1})`
+    );
+    invokeForMessage(agentName, channelId, channelName, content, mentionedAgents, depth + 1);
+  } else if (mentionedAgents.length > 0) {
+    console.log(
+      `[INVOKE] Agent-to-agent chain stopped: depth ${depth + 1} would exceed max ${MAX_CHAIN_DEPTH}`
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
