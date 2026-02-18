@@ -20,30 +20,24 @@ RUN pnpm build
 
 
 # ============================================================
-# Stage 2: Python runtime
+# Stage 2: Bun runtime
 # ============================================================
-FROM python:3.12-slim AS runtime
+FROM oven/bun:1 AS runtime
 
 WORKDIR /app
 
-# System deps
+# System deps (lsof for OpenCode server discovery)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    lsof procps \
+    lsof \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for fast dependency management
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Install server dependencies (layer caching)
+COPY server/package.json server/bun.lock* ./server/
+RUN cd server && bun install --frozen-lockfile
 
-# Install Python dependencies (layer caching)
-COPY pyproject.toml uv.lock ./
-RUN uv venv && uv pip install --no-cache .
-
-# Copy backend, CLI, prompts, and Alembic migrations
-COPY backend/ backend/
-COPY cli/ cli/
+# Copy server source and prompts
+COPY server/ server/
 COPY prompts/ prompts/
-COPY alembic.ini ./
-COPY migrations/ migrations/
 
 # Copy built frontend from stage 1
 COPY --from=frontend-builder /app/frontend/dist frontend/dist
@@ -61,7 +55,7 @@ ENV TALKTO_DATA_DIR=/app/data
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import httpx; r = httpx.get('http://127.0.0.1:8000/api/health', timeout=5); exit(0 if r.status_code == 200 else 1)" || exit 1
+    CMD bun -e "const r = await fetch('http://127.0.0.1:8000/api/channels'); process.exit(r.ok ? 0 : 1)" || exit 1
 
-# Run the API server (frontend served from dist/ by FastAPI)
-CMD [".venv/bin/uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the TS backend (serves API, WebSocket, MCP, and static frontend)
+CMD ["bun", "run", "server/src/index.ts"]

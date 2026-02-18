@@ -9,10 +9,9 @@ services:
     environment:
       - TALKTO_HOST=0.0.0.0
       - TALKTO_PORT=8000
-      - TALKTO_LOG_LEVEL=${TALKTO_LOG_LEVEL:-INFO}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; r = httpx.get('http://127.0.0.1:8000/api/health', timeout=5); exit(0 if r.status_code == 200 else 1)"]
+      test: ["CMD", "bun", "-e", "const r = await fetch('http://127.0.0.1:8000/api/channels'); process.exit(r.ok ? 0 : 1)"]
       interval: 30s
       timeout: 5s
       start_period: 10s
