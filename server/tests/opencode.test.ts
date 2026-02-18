@@ -1,8 +1,9 @@
 /**
- * Tests for OpenCode SDK client manager and discovery utilities.
+ * Tests for OpenCode SDK client manager, discovery utilities,
+ * and broadcaster event factories.
  *
- * These tests focus on the pure utility functions (matchSessionByProject,
- * extractTextFromParts) that don't require a live OpenCode server.
+ * These tests focus on pure utility functions that don't require
+ * a live OpenCode server.
  */
 
 import { describe, test, expect } from "bun:test";
@@ -11,6 +12,10 @@ import {
   extractTextFromParts,
   filterEventsBySession,
 } from "../src/sdk/opencode";
+import {
+  agentStreamingEvent,
+  agentTypingEvent,
+} from "../src/services/broadcaster";
 import type {
   Session,
   Part,
@@ -412,5 +417,55 @@ describe("SessionStatus types", () => {
     expect(status.type).toBe("retry");
     expect((status as { attempt: number }).attempt).toBe(2);
     expect((status as { message: string }).message).toBe("Rate limited");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Broadcaster event factory tests
+// ---------------------------------------------------------------------------
+
+describe("agentStreamingEvent", () => {
+  test("produces correct event shape", () => {
+    const event = agentStreamingEvent("spicy-bat", "ch-123", "Hello ");
+    expect(event.type).toBe("agent_streaming");
+    expect(event.data).toEqual({
+      agent_name: "spicy-bat",
+      channel_id: "ch-123",
+      delta: "Hello ",
+    });
+  });
+
+  test("handles empty delta", () => {
+    const event = agentStreamingEvent("spicy-bat", "ch-123", "");
+    expect(event.data.delta).toBe("");
+  });
+
+  test("handles multi-line delta", () => {
+    const event = agentStreamingEvent("agent", "ch", "line1\nline2\nline3");
+    expect(event.data.delta).toBe("line1\nline2\nline3");
+  });
+});
+
+describe("agentTypingEvent", () => {
+  test("produces typing start event", () => {
+    const event = agentTypingEvent("spicy-bat", "ch-123", true);
+    expect(event.type).toBe("agent_typing");
+    expect(event.data).toEqual({
+      agent_name: "spicy-bat",
+      channel_id: "ch-123",
+      is_typing: true,
+    });
+  });
+
+  test("produces typing stop event with error", () => {
+    const event = agentTypingEvent("spicy-bat", "ch-123", false, "timed out");
+    expect(event.type).toBe("agent_typing");
+    expect(event.data.is_typing).toBe(false);
+    expect(event.data.error).toBe("timed out");
+  });
+
+  test("omits error field when not provided", () => {
+    const event = agentTypingEvent("spicy-bat", "ch-123", false);
+    expect(event.data.error).toBeUndefined();
   });
 });

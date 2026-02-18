@@ -11,6 +11,7 @@ beforeEach(() => {
     realtimeMessages: [],
     agentStatuses: new Map(),
     typingAgents: new Map(),
+    streamingMessages: new Map(),
     invocationError: null,
     wsConnected: false,
   });
@@ -161,6 +162,69 @@ describe("app-store", () => {
         channelId: "ch1",
         message: "existing error",
       });
+    });
+  });
+
+  describe("streaming messages", () => {
+    it("defaults to empty map", () => {
+      expect(useAppStore.getState().streamingMessages.size).toBe(0);
+    });
+
+    it("appendStreamingDelta creates entry and accumulates text", () => {
+      useAppStore.getState().appendStreamingDelta("ch1", "agent-a", "Hello ");
+      useAppStore.getState().appendStreamingDelta("ch1", "agent-a", "world!");
+
+      const channelStreams = useAppStore.getState().streamingMessages.get("ch1");
+      expect(channelStreams).toBeDefined();
+      expect(channelStreams!.get("agent-a")).toBe("Hello world!");
+    });
+
+    it("tracks multiple agents streaming in the same channel", () => {
+      useAppStore.getState().appendStreamingDelta("ch1", "agent-a", "foo");
+      useAppStore.getState().appendStreamingDelta("ch1", "agent-b", "bar");
+
+      const channelStreams = useAppStore.getState().streamingMessages.get("ch1");
+      expect(channelStreams!.size).toBe(2);
+      expect(channelStreams!.get("agent-a")).toBe("foo");
+      expect(channelStreams!.get("agent-b")).toBe("bar");
+    });
+
+    it("tracks agents streaming across different channels", () => {
+      useAppStore.getState().appendStreamingDelta("ch1", "agent-a", "alpha");
+      useAppStore.getState().appendStreamingDelta("ch2", "agent-a", "beta");
+
+      expect(useAppStore.getState().streamingMessages.get("ch1")!.get("agent-a")).toBe("alpha");
+      expect(useAppStore.getState().streamingMessages.get("ch2")!.get("agent-a")).toBe("beta");
+    });
+
+    it("clearStreamingMessage removes a specific agent from a channel", () => {
+      useAppStore.getState().appendStreamingDelta("ch1", "agent-a", "foo");
+      useAppStore.getState().appendStreamingDelta("ch1", "agent-b", "bar");
+
+      useAppStore.getState().clearStreamingMessage("ch1", "agent-a");
+
+      const channelStreams = useAppStore.getState().streamingMessages.get("ch1");
+      expect(channelStreams!.has("agent-a")).toBe(false);
+      expect(channelStreams!.get("agent-b")).toBe("bar");
+    });
+
+    it("clearStreamingMessage removes channel key when last agent is cleared", () => {
+      useAppStore.getState().appendStreamingDelta("ch1", "agent-a", "foo");
+      useAppStore.getState().clearStreamingMessage("ch1", "agent-a");
+
+      expect(useAppStore.getState().streamingMessages.has("ch1")).toBe(false);
+    });
+
+    it("clearStreamingMessage is a no-op for non-existent entries", () => {
+      useAppStore.getState().clearStreamingMessage("ch1", "ghost-agent");
+      expect(useAppStore.getState().streamingMessages.size).toBe(0);
+    });
+
+    it("creates new Map instances on mutation (immutability)", () => {
+      const before = useAppStore.getState().streamingMessages;
+      useAppStore.getState().appendStreamingDelta("ch1", "agent-a", "delta");
+      const after = useAppStore.getState().streamingMessages;
+      expect(before).not.toBe(after);
     });
   });
 
