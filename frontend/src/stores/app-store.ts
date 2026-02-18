@@ -57,6 +57,12 @@ interface AppState {
   typingAgents: Map<string, Set<string>>; // channelId → Set<agent_name>
   setAgentTyping: (channelId: string, agentName: string, isTyping: boolean, error?: string) => void;
 
+  // ── Streaming text (from agent_streaming WebSocket events) ──
+  // channelId → agentName → accumulated text so far
+  streamingMessages: Map<string, Map<string, string>>;
+  appendStreamingDelta: (channelId: string, agentName: string, delta: string) => void;
+  clearStreamingMessage: (channelId: string, agentName: string) => void;
+
   // ── Invocation errors (transient, auto-clear) ──
   invocationError: { channelId: string; message: string } | null;
   clearInvocationError: () => void;
@@ -121,6 +127,33 @@ export const useAppStore = create<AppState>((set) => ({
         typingAgents: next,
         invocationError: error ? { channelId, message: error } : s.invocationError,
       };
+    }),
+
+  // Streaming messages
+  streamingMessages: new Map(),
+  appendStreamingDelta: (channelId, agentName, delta) =>
+    set((s) => {
+      const next = new Map(s.streamingMessages);
+      const channelStreams = new Map(next.get(channelId) ?? []);
+      const current = channelStreams.get(agentName) ?? "";
+      channelStreams.set(agentName, current + delta);
+      next.set(channelId, channelStreams);
+      return { streamingMessages: next };
+    }),
+  clearStreamingMessage: (channelId, agentName) =>
+    set((s) => {
+      const next = new Map(s.streamingMessages);
+      const channelStreams = next.get(channelId);
+      if (channelStreams) {
+        const updated = new Map(channelStreams);
+        updated.delete(agentName);
+        if (updated.size === 0) {
+          next.delete(channelId);
+        } else {
+          next.set(channelId, updated);
+        }
+      }
+      return { streamingMessages: next };
     }),
 
   // Invocation errors

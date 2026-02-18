@@ -14,6 +14,7 @@ export function MessageFeed() {
   const activeChannelId = useAppStore((s) => s.activeChannelId);
   const realtimeMessages = useAppStore((s) => s.realtimeMessages);
   const typingAgents = useAppStore((s) => s.typingAgents);
+  const streamingMessages = useAppStore((s) => s.streamingMessages);
   const invocationError = useAppStore((s) => s.invocationError);
   const clearInvocationError = useAppStore((s) => s.clearInvocationError);
   const { data: fetchedMessages, isLoading } = useMessages(activeChannelId);
@@ -24,6 +25,19 @@ export function MessageFeed() {
   const currentTyping = activeChannelId
     ? Array.from(typingAgents.get(activeChannelId) ?? [])
     : [];
+
+  // Get streaming text for typing agents in current channel
+  const channelStreams = activeChannelId
+    ? streamingMessages.get(activeChannelId)
+    : undefined;
+
+  // Split typing agents into those with streaming text vs those still waiting
+  const streamingAgents = currentTyping.filter(
+    (name) => channelStreams?.has(name) && (channelStreams.get(name) ?? "").length > 0
+  );
+  const waitingAgents = currentTyping.filter(
+    (name) => !streamingAgents.includes(name)
+  );
 
   // Show invocation error for current channel, auto-clear after 5s
   const currentError =
@@ -118,16 +132,27 @@ export function MessageFeed() {
         </div>
       </ScrollArea>
 
-      {/* Typing indicator / invocation error */}
+      {/* Streaming ghost messages — show partial text as agent generates it */}
+      {streamingAgents.map((agentName) => (
+        <StreamingMessage
+          key={`streaming-${agentName}`}
+          agentName={agentName}
+          text={channelStreams?.get(agentName) ?? ""}
+        />
+      ))}
+
+      {/* Typing indicator for agents that haven't started streaming yet */}
       <div
         className={`grid transition-all duration-200 ${
-          currentTyping.length > 0 ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          waitingAgents.length > 0 ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
         }`}
       >
         <div className="overflow-hidden">
-          <TypingIndicator agents={currentTyping} />
+          <TypingIndicator agents={waitingAgents} />
         </div>
       </div>
+
+      {/* Invocation error */}
       <div
         className={`grid transition-all duration-200 ${
           currentError && !currentTyping.length ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
@@ -163,6 +188,41 @@ function InvocationError({ message }: { message: string }) {
     <div className="flex items-center gap-2 px-4 py-1.5">
       <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
       <span className="text-xs text-amber-500/80">{message}</span>
+    </div>
+  );
+}
+
+/** Ghost message shown while an agent is streaming its response in real-time. */
+function StreamingMessage({ agentName, text }: { agentName: string; text: string }) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll as new text streams in
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [text]);
+
+  return (
+    <div className="px-4 py-1.5" ref={bottomRef}>
+      <div className="flex items-start gap-2">
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10">
+          <Bot className="h-3.5 w-3.5 text-primary/60" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-foreground/80">{agentName}</span>
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/40">
+              streaming
+              <span className="inline-flex gap-0.5">
+                <span className="h-0.5 w-0.5 animate-pulse rounded-full bg-primary/40" />
+              </span>
+            </span>
+          </div>
+          <div className="mt-0.5 text-sm text-foreground/70 whitespace-pre-wrap break-words">
+            {text}
+            <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary/50 align-text-bottom" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

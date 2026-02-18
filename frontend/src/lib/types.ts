@@ -69,6 +69,7 @@ export type WSEventType =
   | "new_message"
   | "agent_status"
   | "agent_typing"
+  | "agent_streaming"
   | "channel_created"
   | "feature_update"
   | "subscribed"
@@ -105,6 +106,12 @@ export interface WSAgentTypingData {
   channel_id: string;
   is_typing: boolean;
   error?: string;
+}
+
+export interface WSAgentStreamingData {
+  agent_name: string;
+  channel_id: string;
+  delta: string;
 }
 
 export interface WSChannelCreatedData {

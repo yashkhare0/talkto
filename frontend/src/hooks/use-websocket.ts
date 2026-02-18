@@ -14,6 +14,7 @@ import type {
   WSNewMessageData,
   WSAgentStatusData,
   WSAgentTypingData,
+  WSAgentStreamingData,
 } from "@/lib/types";
 
 const WS_URL = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
@@ -32,6 +33,8 @@ export function useWebSocket(enabled: boolean = true) {
   const addRealtimeMessage = useAppStore((s) => s.addRealtimeMessage);
   const setAgentStatus = useAppStore((s) => s.setAgentStatus);
   const setAgentTyping = useAppStore((s) => s.setAgentTyping);
+  const appendStreamingDelta = useAppStore((s) => s.appendStreamingDelta);
+  const clearStreamingMessage = useAppStore((s) => s.clearStreamingMessage);
   const setWsConnected = useAppStore((s) => s.setWsConnected);
 
   // Keep a ref to the latest queryClient so the WS handlers always use
@@ -57,9 +60,10 @@ export function useWebSocket(enabled: boolean = true) {
             parent_id: msg.parent_id,
             created_at: msg.created_at,
           });
-          // Clear typing indicator when agent sends a message
+          // Clear typing indicator and streaming text when agent sends a message
           if (msg.sender_name) {
             setAgentTyping(msg.channel_id, msg.sender_name, false);
+            clearStreamingMessage(msg.channel_id, msg.sender_name);
           }
           queryClient.invalidateQueries({
             queryKey: queryKeys.messages(msg.channel_id),
@@ -77,6 +81,16 @@ export function useWebSocket(enabled: boolean = true) {
         case "agent_typing": {
           const data = event.data as WSAgentTypingData;
           setAgentTyping(data.channel_id, data.agent_name, data.is_typing, data.error);
+          // Clear streaming text when typing stops (agent finished or errored)
+          if (!data.is_typing) {
+            clearStreamingMessage(data.channel_id, data.agent_name);
+          }
+          break;
+        }
+
+        case "agent_streaming": {
+          const data = event.data as WSAgentStreamingData;
+          appendStreamingDelta(data.channel_id, data.agent_name, data.delta);
           break;
         }
 
@@ -94,7 +108,7 @@ export function useWebSocket(enabled: boolean = true) {
           break;
       }
     },
-    [addRealtimeMessage, setAgentStatus, setAgentTyping],
+    [addRealtimeMessage, setAgentStatus, setAgentTyping, appendStreamingDelta, clearStreamingMessage],
   );
 
   // Keep refs so the WS handlers always use the latest versions without

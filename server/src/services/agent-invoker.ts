@@ -2,12 +2,18 @@
  * Agent invocation — send messages to agents and post their responses.
  *
  * Communication protocol:
- * - All replies use SDK-native responses (session.prompt() returns the response)
+ * - All replies use session.prompt() via the OpenCode SDK
  * - TalkTo extracts the response text and posts it to the channel as the agent
  * - Agents never need the send_message MCP tool for replies (only for proactive messages)
+ * - Text deltas stream to the frontend via agent_streaming WebSocket events
  *
- * DMs: session.prompt() with just the message — the agent's own session has its context
- * @mentions: session.prompt() with last 5-10 channel messages as context
+ * Agent-to-agent chaining:
+ * - When an agent's response contains @mentions, those agents are automatically invoked
+ * - Chain depth is tracked and capped at MAX_CHAIN_DEPTH to prevent infinite loops
+ * - Each chained invocation includes recent channel context so agents see the conversation
+ *
+ * DMs: prompt with just the message — the agent's own session has its context
+ * @mentions: prompt with last 5 channel messages as context
  *
  * Invocations run as fire-and-forget background tasks with typing state broadcasts.
  */
@@ -15,12 +21,65 @@
 import { eq, desc, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { agents, messages, users } from "../db/schema";
-import { broadcastEvent, newMessageEvent, agentTypingEvent } from "./broadcaster";
+import {
+  broadcastEvent,
+  newMessageEvent,
+  agentTypingEvent,
+  agentStreamingEvent,
+} from "./broadcaster";
 import { getAgentInvocationInfo } from "./agent-discovery";
 import {
   promptSessionWithEvents,
   isSessionBusy,
 } from "../sdk/opencode";
+
+// Maximum depth for agent-to-agent invocation chains.
+// Prevents infinite loops when agents keep @mentioning each other.
+const MAX_CHAIN_DEPTH = 5;
+
+// ---------------------------------------------------------------------------
+// @mention extraction from raw text
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract @mentions from message text and validate them against registered agents.
+ *
+ * Matches patterns like @spicy-bat, @silly-narwhal, @the_creator.
+ * Only returns names that correspond to actual registered agents.
+ * Excludes the sender to prevent self-invocation.
+ */
+function extractMentionsFromText(text: string, excludeSender?: string): string[] {
+  // Match @word patterns (agent names are adjective-animal with hyphens/underscores)
+  const mentionPattern = /@([\w-]+)/g;
+  const mentioned = new Set<string>();
+  let match;
+
+  while ((match = mentionPattern.exec(text)) !== null) {
+    const name = match[1];
+    if (name !== excludeSender) {
+      mentioned.add(name);
+    }
+  }
+
+  if (mentioned.size === 0) return [];
+
+  // Validate against registered agents
+  const db = getDb();
+  const validAgents: string[] = [];
+
+  for (const name of mentioned) {
+    const agent = db
+      .select({ agentName: agents.agentName })
+      .from(agents)
+      .where(eq(agents.agentName, name))
+      .get();
+    if (agent) {
+      validAgents.push(agent.agentName);
+    }
+  }
+
+  return validAgents;
+}
 
 // ---------------------------------------------------------------------------
 // Background task tracking — prevents GC of fire-and-forget promises
@@ -50,16 +109,27 @@ function spawnBackgroundTask(fn: () => Promise<void>): void {
  * - DM channel (#dm-{agent_name}): invoke the target agent directly
  * - @mentions: invoke each mentioned agent with channel context
  * - Never invokes the sender (prevents self-invocation loops)
+ * - Chain depth tracked to prevent infinite agent-to-agent loops
+ *
+ * @param depth - Current chain depth (0 = human-initiated, 1+ = agent-chained)
  */
 export function invokeForMessage(
   senderName: string,
   channelId: string,
   channelName: string,
   content: string,
-  mentions: string[] | null
+  mentions: string[] | null,
+  depth: number = 0
 ): void {
+  if (depth >= MAX_CHAIN_DEPTH) {
+    console.log(
+      `[INVOKE] Chain depth ${depth} reached max ${MAX_CHAIN_DEPTH} — stopping chain`
+    );
+    return;
+  }
+
   spawnBackgroundTask(async () => {
-    await _invokeForMessage(senderName, channelId, channelName, content, mentions);
+    await _invokeForMessage(senderName, channelId, channelName, content, mentions, depth);
   });
 }
 
@@ -68,10 +138,11 @@ async function _invokeForMessage(
   channelId: string,
   channelName: string,
   content: string,
-  mentions: string[] | null
+  mentions: string[] | null,
+  depth: number
 ): Promise<void> {
   console.log(
-    `[INVOKE] Starting: sender=${senderName} channel=${channelName} mentions=${JSON.stringify(mentions)}`
+    `[INVOKE] Starting: sender=${senderName} channel=${channelName} mentions=${JSON.stringify(mentions)} depth=${depth}`
   );
   const invoked = new Set<string>();
 
@@ -81,7 +152,7 @@ async function _invokeForMessage(
     if (target === senderName) {
       console.log(`[INVOKE] Skipping self-invocation for '${target}'`);
     } else {
-      await invokeAgent(target, channelId, channelName, content, /* isDm */ true);
+      await invokeAgent(target, channelId, channelName, content, /* isDm */ true, depth);
       invoked.add(target);
     }
   }
@@ -101,7 +172,7 @@ async function _invokeForMessage(
           content,
           context
         );
-        await invokeAgent(mentioned, channelId, channelName, prompt, /* isDm */ false);
+        await invokeAgent(mentioned, channelId, channelName, prompt, /* isDm */ false, depth);
         invoked.add(mentioned);
       });
 
@@ -109,7 +180,7 @@ async function _invokeForMessage(
   }
 
   console.log(
-    `[INVOKE] Complete. Invoked agents: ${invoked.size > 0 ? [...invoked].join(", ") : "none"}`
+    `[INVOKE] Complete. Invoked agents: ${invoked.size > 0 ? [...invoked].join(", ") : "none"} (depth=${depth})`
   );
 }
 
@@ -120,15 +191,20 @@ async function _invokeForMessage(
 /**
  * Invoke a single agent via OpenCode SDK and post the response.
  *
- * Uses session.prompt() with SSE event callbacks for real-time typing
- * indicators. The prompt blocks until the agent finishes processing,
- * then we extract text and post it to the channel.
+ * Uses session.prompt() with SSE event callbacks for real-time streaming.
+ * Text deltas stream to the frontend via `agent_streaming` WebSocket events.
+ *
+ * Note: TUI injection was investigated but OpenCode TUI terminals run without
+ * an HTTP server by default (they use in-process RPC via Web Workers). The TUI
+ * APIs on the `opencode serve` port publish to a separate Bus instance that
+ * doesn't reach the TUI terminal. session.prompt() works reliably and the TUI
+ * still sees the conversation via the shared database.
  *
  * Flow:
  * 1. Broadcast agent_typing (start)
  * 2. Look up invocation info (server_url + session_id)
  * 3. Check if session is busy — log warning but still proceed (will queue)
- * 4. Call session.prompt() with event callbacks for typing indicators
+ * 4. Send prompt via session.prompt() with SSE callbacks
  * 5. Extract text from response
  * 6. Post message in channel as the agent
  * 7. Broadcast new_message + agent_typing (stop)
@@ -140,7 +216,8 @@ async function invokeAgent(
   channelId: string,
   channelName: string,
   prompt: string,
-  isDm: boolean
+  isDm: boolean,
+  depth: number = 0
 ): Promise<void> {
   console.log(
     `[INVOKE] Invoking '${agentName}' in ${channelName} (${isDm ? "DM" : "@mention"})`
@@ -166,25 +243,30 @@ async function invokeAgent(
       console.warn(`[INVOKE] '${agentName}' session is busy — prompt will queue`);
     }
 
+    // SSE callbacks — stream real-time events to the frontend
+    const callbacks = {
+      onTypingStart: () => {
+        // Re-broadcast typing to confirm agent is actively processing
+        broadcastEvent(agentTypingEvent(agentName, channelId, true));
+      },
+      onTextDelta: (delta: string) => {
+        // Stream each text fragment to the frontend in real-time
+        broadcastEvent(agentStreamingEvent(agentName, channelId, delta));
+      },
+      onError: (error: string) => {
+        console.error(`[INVOKE] SSE error for '${agentName}':`, error);
+      },
+    };
+
     console.log(
       `[INVOKE] Prompting '${agentName}' session=${info.sessionId} server=${info.serverUrl}`
     );
 
-    // Use event-driven prompt for real-time typing indicators.
-    // SSE callbacks fire as the agent processes, giving the UI live feedback.
     const result = await promptSessionWithEvents(
       info.serverUrl,
       info.sessionId,
       prompt,
-      {
-        onTypingStart: () => {
-          // Re-broadcast typing to confirm agent is actively processing
-          broadcastEvent(agentTypingEvent(agentName, channelId, true));
-        },
-        onError: (error) => {
-          console.error(`[INVOKE] SSE error for '${agentName}':`, error);
-        },
-      }
+      callbacks
     );
 
     if (!result || !result.text) {
@@ -200,7 +282,8 @@ async function invokeAgent(
     );
 
     // Post the agent's response as a message in the channel
-    postAgentResponse(agentName, channelId, channelName, result.text);
+    // Also triggers agent-to-agent chaining if the response contains @mentions
+    postAgentResponse(agentName, channelId, channelName, result.text, depth);
 
     // Broadcast typing stop (success)
     broadcastEvent(agentTypingEvent(agentName, channelId, false));
@@ -219,12 +302,16 @@ async function invokeAgent(
 /**
  * Create a message in a channel as an agent and broadcast it.
  * This is how SDK-native responses get posted to TalkTo.
+ *
+ * Also handles agent-to-agent chaining: if the response contains @mentions
+ * of other agents, those agents are automatically invoked (up to MAX_CHAIN_DEPTH).
  */
 function postAgentResponse(
   agentName: string,
   channelId: string,
   channelName: string,
-  content: string
+  content: string,
+  depth: number = 0
 ): void {
   const db = getDb();
 
@@ -239,6 +326,10 @@ function postAgentResponse(
     return;
   }
 
+  // Extract @mentions from the response text
+  const mentionedAgents = extractMentionsFromText(content, agentName);
+  const mentionsJson = mentionedAgents.length > 0 ? JSON.stringify(mentionedAgents) : null;
+
   const msgId = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -248,6 +339,7 @@ function postAgentResponse(
       channelId,
       senderId: agent.id,
       content,
+      mentions: mentionsJson,
       createdAt: now,
     })
     .run();
@@ -260,14 +352,27 @@ function postAgentResponse(
       senderId: agent.id,
       senderName: agentName,
       content,
+      mentions: mentionedAgents.length > 0 ? mentionedAgents : null,
       createdAt: now,
       senderType: "agent",
     })
   );
 
   console.log(
-    `[INVOKE] Posted response from '${agentName}' to ${channelName} (${content.length} chars)`
+    `[INVOKE] Posted response from '${agentName}' to ${channelName} (${content.length} chars, mentions: ${mentionedAgents.length > 0 ? mentionedAgents.join(", ") : "none"})`
   );
+
+  // Agent-to-agent chaining: if the response @mentions other agents, invoke them
+  if (mentionedAgents.length > 0 && depth + 1 < MAX_CHAIN_DEPTH) {
+    console.log(
+      `[INVOKE] Agent-to-agent chain: '${agentName}' mentioned ${mentionedAgents.join(", ")} (depth ${depth} → ${depth + 1})`
+    );
+    invokeForMessage(agentName, channelId, channelName, content, mentionedAgents, depth + 1);
+  } else if (mentionedAgents.length > 0) {
+    console.log(
+      `[INVOKE] Agent-to-agent chain stopped: depth ${depth + 1} would exceed max ${MAX_CHAIN_DEPTH}`
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

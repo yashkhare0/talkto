@@ -21,6 +21,28 @@ import type {
   EventMessagePartUpdated,
 } from "@opencode-ai/sdk";
 
+/**
+ * Event type for streaming text deltas from the OpenCode SSE stream.
+ * 
+ * The v2 SDK defines this as `EventMessagePartDelta` but doesn't export it
+ * from a public path. The v1 SDK doesn't define it at all, even though
+ * the server sends these events. We define it here for type safety.
+ * 
+ * IMPORTANT: The SSE event type is `message.part.delta` — NOT `message.part.updated`.
+ * `message.part.updated` contains the full accumulated text snapshot (no delta).
+ * `message.part.delta` contains the incremental text fragment for streaming.
+ */
+interface EventMessagePartDelta {
+  type: "message.part.delta";
+  properties: {
+    sessionID: string;
+    messageID: string;
+    partID: string;
+    field: string;
+    delta: string;
+  };
+}
+
 // Re-export useful types for consumers
 export type {
   Session,
@@ -48,7 +70,7 @@ type OpencodeClient = ReturnType<typeof createOpencodeClient>;
 const clients = new Map<string, OpencodeClient>();
 
 /**
- * Get or create an OpenCode SDK client for a given server URL.
+ * Get or create an OpenCode SDK client (v1) for a given server URL.
  * Clients are cached per URL to avoid creating new connections per call.
  */
 export function getClient(serverUrl: string): OpencodeClient {
@@ -61,9 +83,10 @@ export function getClient(serverUrl: string): OpencodeClient {
   return client;
 }
 
-/** Remove a cached client (e.g., when server becomes unreachable). */
+/** Remove cached clients (e.g., when server becomes unreachable). */
 export function removeClient(serverUrl: string): void {
-  clients.delete(serverUrl.replace(/\/$/, ""));
+  const normalized = serverUrl.replace(/\/$/, "");
+  clients.delete(normalized);
 }
 
 // ---------------------------------------------------------------------------
@@ -400,7 +423,16 @@ export async function promptSessionWithEvents(
             case "session.idle":
               callbacks.onComplete?.();
               break;
+            case "message.part.delta": {
+              // Streaming text delta — the primary source for real-time text
+              const deltaEvent = event as unknown as EventMessagePartDelta;
+              if (deltaEvent.properties.field === "text" && deltaEvent.properties.delta) {
+                callbacks.onTextDelta?.(deltaEvent.properties.delta);
+              }
+              break;
+            }
             case "message.part.updated": {
+              // Fallback: v1 type says delta might be here (legacy compat)
               const delta = (event as EventMessagePartUpdated).properties.delta;
               if (delta) {
                 callbacks.onTextDelta?.(delta);
@@ -450,75 +482,6 @@ export function extractTextFromParts(parts: Part[]): string {
     (p): p is TextPart => p.type === "text" && !p.ignored
   );
   return textParts.map((p) => p.text).join("\n").trim();
-}
-
-// ---------------------------------------------------------------------------
-// TUI operations — for active TUI session support
-// ---------------------------------------------------------------------------
-
-/**
- * Check if a TUI is active for a given server/project.
- *
- * The OpenCode API doesn't have a direct "is TUI connected?" field.
- * We use a heuristic: attempt to clear and immediately re-clear the prompt.
- * If the TUI is not connected, the call fails with an error.
- *
- * This is a lightweight check — clearPrompt is a no-op if prompt is empty.
- */
-export async function isTuiActive(serverUrl: string): Promise<boolean> {
-  try {
-    const client = getClient(serverUrl);
-    // clearPrompt succeeds only if a TUI is connected
-    const result = await client.tui.clearPrompt();
-    return result.data === true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Append text to the TUI prompt and submit it.
- * Used for active TUI sessions where we want the agent to see the
- * message naturally in their terminal.
- *
- * Returns true if both operations succeeded.
- */
-export async function tuiPrompt(
-  serverUrl: string,
-  text: string
-): Promise<boolean> {
-  try {
-    const client = getClient(serverUrl);
-    // Clear any existing text first to prevent concatenation
-    await client.tui.clearPrompt();
-    const appendResult = await client.tui.appendPrompt({ body: { text } });
-    if (!appendResult.data) return false;
-    const submitResult = await client.tui.submitPrompt();
-    return submitResult.data === true;
-  } catch (err) {
-    console.error("[OPENCODE] TUI prompt failed:", err);
-    return false;
-  }
-}
-
-/**
- * Show a toast notification in the TUI.
- * Useful for telling an agent they've been mentioned or received a DM.
- */
-export async function tuiToast(
-  serverUrl: string,
-  message: string,
-  variant: "info" | "success" | "warning" | "error" = "info"
-): Promise<boolean> {
-  try {
-    const client = getClient(serverUrl);
-    const result = await client.tui.showToast({
-      body: { message, variant, duration: 5000 },
-    });
-    return result.data === true;
-  } catch {
-    return false;
-  }
 }
 
 // ---------------------------------------------------------------------------

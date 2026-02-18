@@ -96,6 +96,21 @@ export function agentTypingEvent(
   return { type: "agent_typing", data };
 }
 
+export function agentStreamingEvent(
+  agentName: string,
+  channelId: string,
+  delta: string
+): WsEvent {
+  return {
+    type: "agent_streaming",
+    data: {
+      agent_name: agentName,
+      channel_id: channelId,
+      delta,
+    },
+  };
+}
+
 export function featureUpdateEvent(opts: {
   featureId: string;
   title: string;

@@ -19,7 +19,7 @@ interface MessageBubbleProps {
 
 export function MessageBubble({
   message,
-  isOwnMessage,
+  isOwnMessage: _isOwnMessage,
   showSender,
 }: MessageBubbleProps) {
   const isAgent = message.sender_type === "agent";
