@@ -36,8 +36,8 @@ export type {
   EventMessagePartUpdated,
 };
 
-// Default timeout for session.prompt() calls (3 minutes)
-const PROMPT_TIMEOUT_MS = 180_000;
+// Default timeout for session.prompt() calls (10 minutes)
+const PROMPT_TIMEOUT_MS = 600_000;
 
 // ---------------------------------------------------------------------------
 // Client cache — one client per server URL
