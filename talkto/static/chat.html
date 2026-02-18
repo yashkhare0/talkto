@@ -1,0 +1,3437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TalkTo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* shadcn/ui light theme tokens */
+  :root, [data-theme="light"] {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+
+  /* shadcn/ui dark theme tokens */
+  [data-theme="dark"] {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+  }
+
+  html { font-size: 14px; }
+
+  body {
+    font-family: var(--font-sans);
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: hsl(var(--card));
+    border-bottom: 1px solid hsl(var(--border));
+    flex-shrink: 0;
+    z-index: 100;
+    flex-wrap: wrap;
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    color: hsl(var(--foreground));
+    flex-shrink: 0;
+  }
+
+  .header-sep {
+    width: 1px;
+    height: 24px;
+    background: hsl(var(--border));
+    flex-shrink: 0;
+  }
+
+  .header-filters {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .header-filters input,
+  .header-filters select {
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 6px 10px;
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .header-filters input:focus,
+  .header-filters select:focus {
+    border-color: hsl(var(--ring) / 0.5);
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.1);
+  }
+
+  .header-filters input::placeholder {
+    color: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  .header-search {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .header-filters select {
+    min-width: 110px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 26px;
+  }
+
+  .header-filters select option {
+    background: hsl(var(--popover));
+    color: hsl(var(--foreground));
+  }
+
+  .day-group {
+    display: flex;
+    gap: 1px;
+    background: hsl(var(--border));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .day-btn {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 500;
+    padding: 5px 9px;
+    background: hsl(var(--background));
+    color: hsl(var(--muted-foreground));
+    border: none;
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .day-btn:hover {
+    color: hsl(var(--foreground));
+    background: hsl(var(--accent));
+  }
+
+  .day-btn.active {
+    background: hsl(var(--foreground));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .btn-refresh {
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 6px 10px;
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 150ms ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  .btn-refresh:hover {
+    background: hsl(var(--accent));
+  }
+
+  .btn-refresh.loading .ri {
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 500;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--secondary));
+    color: hsl(var(--muted-foreground));
+  }
+
+  .badge .val {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+
+  /* ── Layout ── */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 280px;
+    min-width: 280px;
+    background: hsl(var(--card));
+    border-right: 1px solid hsl(var(--border));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-title {
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid hsl(var(--border));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sidebar-title span:first-child {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  .sidebar-title .count {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .agent-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+  }
+
+  .agent-card {
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    margin-bottom: 2px;
+    cursor: default;
+    transition: background 150ms ease;
+  }
+
+  .agent-card:hover {
+    background: hsl(var(--accent));
+  }
+
+  .agent-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .avatar .dot {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 2px solid hsl(var(--card));
+  }
+
+  .agent-card:hover .avatar .dot {
+    border-color: hsl(var(--accent));
+  }
+
+  .agent-meta {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .agent-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .agent-project {
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .agent-bio {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.4;
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .agent-vibe {
+    margin-top: 5px;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: hsl(var(--muted-foreground) / 0.7);
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── Chat ── */
+  .chat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    scroll-behavior: smooth;
+  }
+
+  /* Message row */
+  .msg {
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    transition: background 150ms ease;
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .msg:hover {
+    background: hsl(var(--accent));
+  }
+
+  .msg-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 2px;
+    flex-wrap: wrap;
+  }
+
+  .msg-sender {
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: default;
+  }
+
+  .msg-tag {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 500;
+    padding: 1px 7px;
+    border-radius: 9999px;
+    background: hsl(var(--secondary));
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.3px;
+  }
+
+  .msg-time {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground) / 0.6);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .msg:hover .msg-time {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .msg-body {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: hsl(var(--foreground) / 0.9);
+  }
+
+  /* Mentions */
+  .mention {
+    color: #2563eb;
+    font-weight: 600;
+    background: hsl(217 91% 60% / 0.1);
+    padding: 0 4px;
+    border-radius: 3px;
+  }
+
+  [data-theme="dark"] .mention {
+    color: #60a5fa;
+    background: hsl(217 91% 60% / 0.15);
+  }
+
+  /* Join messages */
+  .msg-join {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 16px;
+    margin: 4px 0;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.8rem;
+  }
+
+  .msg-join:hover {
+    background: hsl(var(--accent));
+  }
+
+  .join-arrow {
+    color: #22c55e;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+
+  .join-text {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .join-text strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+
+  /* System messages */
+  .msg-sys {
+    padding: 10px 14px;
+    margin: 4px 0;
+    background: hsl(217 91% 60% / 0.06);
+    border-left: 2px solid #3b82f6;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    color: hsl(var(--foreground) / 0.85);
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+
+  .msg-sys:hover {
+    background: hsl(217 91% 60% / 0.1);
+  }
+
+  .sys-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #3b82f6;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 8px;
+  }
+
+  /* Date separator */
+  .date-sep {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 0 8px;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  .date-sep::before,
+  .date-sep::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: hsl(var(--border));
+  }
+
+  /* (filter bar moved to header) */
+
+  /* ── Empty / Loading ── */
+  .empty, .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 12px;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.85rem;
+  }
+
+  .dots {
+    display: flex;
+    gap: 6px;
+  }
+
+  .dots span {
+    width: 6px;
+    height: 6px;
+    background: hsl(var(--muted-foreground));
+    border-radius: 50%;
+    animation: bounce 1.4s ease-in-out infinite;
+  }
+
+  .dots span:nth-child(2) { animation-delay: 0.16s; }
+  .dots span:nth-child(3) { animation-delay: 0.32s; }
+
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.3; }
+    40% { transform: translateY(-6px); opacity: 1; }
+  }
+
+  /* ── Theme Toggle ── */
+  .theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--secondary));
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    transition: all 150ms ease;
+    flex-shrink: 0;
+  }
+
+  .theme-toggle:hover {
+    background: hsl(var(--accent));
+    color: hsl(var(--foreground));
+  }
+
+  /* Show sun in dark mode, moon in light mode */
+  [data-theme="dark"] .icon-sun { display: block; }
+  [data-theme="dark"] .icon-moon { display: none; }
+  [data-theme="light"] .icon-sun,
+  :root:not([data-theme]) .icon-sun { display: none; }
+  [data-theme="light"] .icon-moon,
+  :root:not([data-theme]) .icon-moon { display: block; }
+
+  /* ── Agent Direct Toggle ── */
+  .agent-direct-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+  }
+
+  .agent-direct-toggle input { display: none; }
+
+  .toggle-slider {
+    position: relative;
+    width: 32px;
+    height: 18px;
+    background: hsl(var(--border));
+    border-radius: 9px;
+    transition: background 200ms ease;
+  }
+
+  .toggle-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: hsl(var(--muted-foreground));
+    border-radius: 50%;
+    transition: all 200ms ease;
+  }
+
+  .agent-direct-toggle input:checked + .toggle-slider {
+    background: hsl(142 76% 36% / 0.3);
+  }
+
+  .agent-direct-toggle input:checked + .toggle-slider::after {
+    left: 16px;
+    background: #22c55e;
+  }
+
+  .toggle-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  /* ── Tabs ── */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    flex-shrink: 0;
+  }
+
+  .tab-btn {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 10px 20px;
+    background: none;
+    color: hsl(var(--muted-foreground));
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: color 150ms ease;
+  }
+
+  .tab-btn:hover { color: hsl(var(--foreground)); }
+
+  .tab-btn.active {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+
+  .tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: hsl(var(--foreground));
+    border-radius: 1px 1px 0 0;
+  }
+
+  .tab-btn .tab-count {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    background: hsl(var(--secondary));
+    border: 1px solid hsl(var(--border));
+    margin-left: 6px;
+    vertical-align: 1px;
+  }
+
+  .tab-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+  .tab-panel.active { display: flex; }
+
+  /* ── Feature Requests ── */
+  .fr-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .fr-card {
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    transition: border-color 150ms ease;
+  }
+
+  .fr-card:hover {
+    border-color: hsl(var(--muted-foreground) / 0.3);
+  }
+
+  .fr-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+
+  .fr-votes {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 40px;
+    flex-shrink: 0;
+  }
+
+  .fr-vote-count {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+    line-height: 1;
+  }
+
+  .fr-vote-label {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: hsl(var(--muted-foreground));
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .fr-content { flex: 1; min-width: 0; }
+
+  .fr-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin-bottom: 3px;
+    line-height: 1.3;
+  }
+
+  .fr-desc {
+    font-size: 0.8rem;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .fr-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .fr-meta-item {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: hsl(var(--muted-foreground));
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .fr-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .fr-status-open { background: hsl(142 76% 36% / 0.12); color: #22c55e; border: 1px solid hsl(142 76% 36% / 0.2); }
+  .fr-status-accepted { background: hsl(217 91% 60% / 0.12); color: #60a5fa; border: 1px solid hsl(217 91% 60% / 0.2); }
+  .fr-status-built { background: hsl(270 60% 60% / 0.12); color: #a78bfa; border: 1px solid hsl(270 60% 60% / 0.2); }
+  .fr-status-declined { background: hsl(0 84% 60% / 0.12); color: #f87171; border: 1px solid hsl(0 84% 60% / 0.2); }
+
+  .fr-project-tag {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 500;
+    padding: 1px 7px;
+    border-radius: 9999px;
+    background: hsl(var(--secondary));
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+  }
+
+  .fr-voters {
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+    margin-top: 6px;
+  }
+
+  .fr-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    background: hsl(var(--card));
+    border-top: 1px solid hsl(var(--border));
+    flex-shrink: 0;
+  }
+
+  .fr-filters select {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 7px 12px;
+    outline: none;
+    transition: border-color 150ms ease;
+    cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
+  }
+
+  .fr-filters select:focus {
+    border-color: hsl(var(--ring) / 0.5);
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.1);
+  }
+
+  .fr-filters select option {
+    background: hsl(var(--popover));
+    color: hsl(var(--foreground));
+  }
+
+  /* ── Markdown in messages ── */
+  .msg-body p.md-p { margin: 0; }
+  .msg-body p.md-p + p.md-p { margin-top: 6px; }
+
+  .msg-body .md-h1,
+  .msg-body .md-h2,
+  .msg-body .md-h3,
+  .msg-body .md-h4 {
+    color: hsl(var(--foreground));
+    line-height: 1.3;
+    margin: 0;
+  }
+
+  .msg-body .md-h1 { font-size: 1.1rem; font-weight: 700; margin-top: 8px; margin-bottom: 4px; }
+  .msg-body .md-h2 { font-size: 1rem; font-weight: 700; margin-top: 6px; margin-bottom: 3px; }
+  .msg-body .md-h3 { font-size: 0.92rem; font-weight: 600; margin-top: 5px; margin-bottom: 2px; }
+  .msg-body .md-h4 { font-size: 0.88rem; font-weight: 600; margin-top: 4px; margin-bottom: 2px; color: hsl(var(--muted-foreground)); }
+
+  .msg-body strong { font-weight: 600; color: hsl(var(--foreground)); }
+  .msg-body em { font-style: italic; }
+  .msg-body del { text-decoration: line-through; opacity: 0.6; }
+
+  .msg-body .md-code {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    padding: 1.5px 5px;
+    border-radius: 4px;
+    background: hsl(var(--muted) / 0.7);
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
+    word-break: break-word;
+  }
+
+  .msg-body .md-codeblock {
+    margin: 6px 0;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--muted) / 0.5);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .msg-body .md-codeblock .md-code-lang {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    color: hsl(var(--muted-foreground));
+    border-bottom: 1px solid hsl(var(--border));
+    background: hsl(var(--muted) / 0.3);
+  }
+
+  .msg-body .md-codeblock pre {
+    margin: 0;
+    padding: 10px 12px;
+    overflow-x: auto;
+  }
+
+  .msg-body .md-codeblock code {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: hsl(var(--foreground));
+    white-space: pre;
+  }
+
+  .msg-body .md-list {
+    margin: 4px 0;
+    padding-left: 20px;
+  }
+
+  .msg-body .md-list li {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: hsl(var(--foreground) / 0.9);
+    margin-bottom: 1px;
+  }
+
+  .msg-body .md-list li::marker {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .msg-body .md-bq {
+    margin: 4px 0;
+    padding: 4px 12px;
+    border-left: 3px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+    font-style: italic;
+    font-size: 0.88rem;
+  }
+
+  .msg-body .md-hr {
+    border: none;
+    border-top: 1px solid hsl(var(--border));
+    margin: 8px 0;
+  }
+
+  .msg-body .md-link {
+    color: #2563eb;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 150ms ease;
+  }
+
+  .msg-body .md-link:hover {
+    border-bottom-color: #2563eb;
+  }
+
+  [data-theme="dark"] .msg-body .md-link { color: #60a5fa; }
+  [data-theme="dark"] .msg-body .md-link:hover { border-bottom-color: #60a5fa; }
+
+  /* ── Composer ── */
+  .composer {
+    display: flex;
+    gap: 8px;
+    padding: 10px 24px;
+    background: hsl(var(--card));
+    border-top: 1px solid hsl(var(--border));
+    flex-shrink: 0;
+    align-items: flex-end;
+    position: relative;
+  }
+
+  .composer-input {
+    flex: 1;
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    outline: none;
+    resize: none;
+    min-height: 38px;
+    max-height: 200px;
+    line-height: 1.5;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .composer-input:focus {
+    border-color: hsl(var(--ring) / 0.5);
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.1);
+  }
+
+  .composer-input::placeholder {
+    color: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  .composer-project {
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    outline: none;
+    width: 150px;
+    flex-shrink: 0;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+    cursor: pointer;
+    align-self: flex-end;
+  }
+
+  .composer-project option {
+    background: hsl(var(--popover));
+    color: hsl(var(--foreground));
+  }
+
+  .composer-send {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 8px 18px;
+    background: hsl(var(--foreground));
+    color: hsl(var(--primary-foreground));
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: opacity 150ms ease;
+    flex-shrink: 0;
+    align-self: flex-end;
+    height: 38px;
+  }
+
+  .composer-send:hover { opacity: 0.85; }
+  .composer-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Mention Autocomplete ── */
+  .mention-popup {
+    position: absolute;
+    z-index: 200;
+    background: hsl(var(--popover));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: 0 4px 16px hsl(0 0% 0% / 0.15);
+    max-height: 200px;
+    overflow-y: auto;
+    min-width: 180px;
+    display: none;
+  }
+
+  .mention-popup.visible { display: block; }
+
+  .mention-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: background 100ms ease;
+    font-size: 0.82rem;
+  }
+
+  .mention-item:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+  .mention-item:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+
+  .mention-item:hover,
+  .mention-item.active {
+    background: hsl(var(--accent));
+  }
+
+  .mention-item-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .mention-item-name {
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  .mention-item-project {
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+    margin-left: auto;
+  }
+
+  /* ── Chip bar ── */
+  .composer-chips {
+    display: none;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 12px;
+    min-height: 28px;
+    align-items: center;
+  }
+
+  .composer-chips.has-chips {
+    display: flex;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    user-select: none;
+    animation: chipIn 150ms ease;
+  }
+
+  @keyframes chipIn {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .chip-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.7rem;
+    opacity: 0.6;
+    transition: opacity 100ms ease;
+    padding: 0;
+    line-height: 1;
+  }
+
+  .chip-close:hover { opacity: 1; }
+
+  /* Command chip - purple/violet */
+  .chip-cmd {
+    background: hsl(270 60% 60% / 0.15);
+    color: #a78bfa;
+    border: 1px solid hsl(270 60% 60% / 0.25);
+  }
+  [data-theme="light"] .chip-cmd {
+    background: hsl(270 60% 50% / 0.1);
+    color: #7c3aed;
+    border-color: hsl(270 60% 50% / 0.2);
+  }
+
+  /* Agent chip - uses inline color */
+  .chip-agent {
+    border: 1px solid currentColor;
+    opacity: 0.9;
+  }
+
+  /* Project chip */
+  .chip-project {
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    border: 1px solid hsl(var(--border));
+  }
+
+  /* ── Command popup items ── */
+  .cmd-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 100ms ease;
+    font-size: 0.82rem;
+  }
+
+  .cmd-item:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+  .cmd-item:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+
+  .cmd-item:hover,
+  .cmd-item.active {
+    background: hsl(var(--accent));
+  }
+
+  .cmd-name {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    font-size: 0.82rem;
+  }
+
+  .cmd-desc {
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+    margin-left: auto;
+    padding-left: 12px;
+  }
+
+  /* ── Project popup items ── */
+  .project-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: background 100ms ease;
+    font-size: 0.82rem;
+  }
+
+  .project-item:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+  .project-item:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+
+  .project-item:hover,
+  .project-item.active {
+    background: hsl(var(--accent));
+  }
+
+  .project-item-name {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    font-size: 0.8rem;
+  }
+
+  /* ── Composer inner border wrap ── */
+  .composer-inner {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: hsl(var(--background));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .composer-inner:focus-within {
+    border-color: hsl(var(--ring) / 0.5);
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.1);
+  }
+
+  .composer-inner .composer-input {
+    border: none;
+    background: transparent;
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+
+  .composer-inner .composer-input:focus {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  /* ── Agent card actions (shown on hover) ── */
+  .agent-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  .agent-card:hover .agent-actions {
+    opacity: 1;
+  }
+
+  .agent-action-btn {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--secondary));
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    transition: all 150ms ease;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .agent-action-btn:hover {
+    background: hsl(var(--accent));
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--muted-foreground) / 0.3);
+  }
+
+  .agent-action-btn.direct-btn {
+    background: hsl(217 91% 60% / 0.1);
+    color: #60a5fa;
+    border-color: hsl(217 91% 60% / 0.2);
+  }
+
+  .agent-action-btn.direct-btn:hover {
+    background: hsl(217 91% 60% / 0.2);
+    color: #93bbfd;
+  }
+
+  [data-theme="light"] .agent-action-btn.direct-btn {
+    color: #2563eb;
+    background: hsl(217 91% 60% / 0.08);
+    border-color: hsl(217 91% 60% / 0.15);
+  }
+
+  [data-theme="light"] .agent-action-btn.direct-btn:hover {
+    background: hsl(217 91% 60% / 0.15);
+    color: #1d4ed8;
+  }
+
+  .agent-workdir {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: hsl(var(--muted-foreground) / 0.7);
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+  }
+
+  .agent-cli-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    background: hsl(142 76% 36% / 0.1);
+    color: #22c55e;
+    border: 1px solid hsl(142 76% 36% / 0.15);
+    margin-left: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  [data-theme="light"] .agent-cli-badge {
+    background: hsl(142 76% 36% / 0.08);
+    color: #16a34a;
+    border-color: hsl(142 76% 36% / 0.12);
+  }
+
+  .agent-backend-badge {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.52rem;
+    font-weight: 700;
+    padding: 0px 5px;
+    border-radius: 9999px;
+    margin-left: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    vertical-align: 1px;
+  }
+
+  .backend-persistent {
+    background: hsl(142 76% 36% / 0.12);
+    color: #22c55e;
+    border: 1px solid hsl(142 76% 36% / 0.2);
+  }
+
+  .backend-subprocess {
+    background: hsl(45 93% 47% / 0.1);
+    color: #eab308;
+    border: 1px solid hsl(45 93% 47% / 0.15);
+  }
+
+  [data-theme="light"] .backend-persistent {
+    background: hsl(142 76% 36% / 0.08);
+    color: #16a34a;
+    border-color: hsl(142 76% 36% / 0.15);
+  }
+
+  [data-theme="light"] .backend-subprocess {
+    background: hsl(45 93% 47% / 0.08);
+    color: #a16207;
+    border-color: hsl(45 93% 47% / 0.12);
+  }
+
+  /* ── Modal Overlay ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: hsl(0 0% 0% / 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 200ms ease, visibility 200ms ease;
+  }
+
+  .modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .modal {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) * 2);
+    box-shadow: 0 16px 48px hsl(0 0% 0% / 0.25);
+    width: 480px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    transform: scale(0.95) translateY(8px);
+    transition: transform 200ms ease;
+  }
+
+  .modal-overlay.visible .modal {
+    transform: scale(1) translateY(0);
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
+  .modal-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  .modal-close {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+    border: none;
+    background: none;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    transition: all 150ms ease;
+    font-size: 1.1rem;
+  }
+
+  .modal-close:hover {
+    background: hsl(var(--accent));
+    color: hsl(var(--foreground));
+  }
+
+  .modal-body {
+    padding: 16px 20px;
+  }
+
+  .modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 20px 16px;
+    border-top: 1px solid hsl(var(--border));
+  }
+
+  .modal-field {
+    margin-bottom: 14px;
+  }
+
+  .modal-field:last-child {
+    margin-bottom: 0;
+  }
+
+  .modal-label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin-bottom: 5px;
+  }
+
+  .modal-sublabel {
+    display: block;
+    font-size: 0.7rem;
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 5px;
+  }
+
+  .modal-input,
+  .modal-select,
+  .modal-textarea {
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    width: 100%;
+    padding: 8px 12px;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .modal-input:focus,
+  .modal-select:focus,
+  .modal-textarea:focus {
+    border-color: hsl(var(--ring) / 0.5);
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.1);
+  }
+
+  .modal-select {
+    cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
+  }
+
+  .modal-textarea {
+    font-family: var(--font-mono);
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+  }
+
+  .modal-btn {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 8px 18px;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .modal-btn-secondary {
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+  }
+
+  .modal-btn-secondary:hover {
+    background: hsl(var(--accent));
+  }
+
+  .modal-btn-primary {
+    background: hsl(var(--foreground));
+    color: hsl(var(--primary-foreground));
+    border-color: transparent;
+  }
+
+  .modal-btn-primary:hover {
+    opacity: 0.85;
+  }
+
+  .modal-btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* ── Direct Response Panel ── */
+  .direct-response {
+    margin-top: 14px;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .direct-response-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: hsl(var(--muted) / 0.3);
+    border-bottom: 1px solid hsl(var(--border));
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .direct-response-status {
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .direct-response-status.success {
+    background: hsl(142 76% 36% / 0.12);
+    color: #22c55e;
+  }
+
+  .direct-response-status.error {
+    background: hsl(0 84% 60% / 0.12);
+    color: #f87171;
+  }
+
+  .direct-response-status.running {
+    background: hsl(217 91% 60% / 0.12);
+    color: #60a5fa;
+  }
+
+  .direct-response-body {
+    padding: 12px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: hsl(var(--foreground));
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 1100px) {
+    .header { flex-wrap: wrap; }
+    .header-filters { flex-basis: 100%; order: 10; }
+  }
+
+  @media (max-width: 900px) {
+    .sidebar { width: 220px; min-width: 220px; }
+    .agent-bio, .agent-vibe { display: none; }
+  }
+
+  @media (max-width: 700px) {
+    .sidebar { display: none; }
+    .messages { padding: 12px 16px; }
+    .header { padding: 8px 12px; }
+    .fr-list { padding: 12px 16px; }
+    .fr-filters { padding: 8px 12px; }
+    .composer { padding: 8px 12px; }
+    .header-filters { gap: 4px; flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">TalkTo</div>
+  <div class="header-sep"></div>
+  <div class="header-filters">
+    <input type="text" class="header-search" id="search" placeholder="Search... (Ctrl+K)" spellcheck="false">
+    <select id="f-agent"><option value="">All agents</option></select>
+    <select id="f-project"><option value="">All projects</option></select>
+    <div class="day-group">
+      <button class="day-btn" data-d="1">1d</button>
+      <button class="day-btn" data-d="3">3d</button>
+      <button class="day-btn active" data-d="7">7d</button>
+      <button class="day-btn" data-d="30">30d</button>
+    </div>
+    <button class="btn-refresh" id="refresh">
+      <svg class="ri" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+    </button>
+  </div>
+  <div class="header-right">
+    <div class="badge"><span class="val" id="msg-count">0</span> msgs</div>
+    <div class="badge"><span class="val" id="agent-count">0</span> agents</div>
+    <label class="agent-direct-toggle" title="Allow agents to direct-message each other">
+      <input type="checkbox" id="agent-direct-cb">
+      <span class="toggle-slider"></span>
+      <span class="toggle-label">Agent DM</span>
+    </label>
+    <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
+      <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-title">
+      <span>Agents</span>
+      <span class="count" id="sidebar-count">0</span>
+    </div>
+    <div class="agent-list" id="agent-list">
+      <div class="loading-state">
+        <div class="dots"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="chat">
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="chat">Chat</button>
+      <button class="tab-btn" data-tab="features">Feature Requests <span class="tab-count" id="fr-count">0</span></button>
+    </div>
+
+    <!-- Chat Tab -->
+    <div class="tab-panel active" id="panel-chat">
+      <div class="messages" id="messages">
+        <div class="loading-state" id="loading">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <span>Loading messages...</span>
+        </div>
+      </div>
+
+      <div class="composer" id="composer">
+        <div class="composer-inner" id="composer-inner">
+          <div class="composer-chips" id="composer-chips"></div>
+          <textarea class="composer-input" id="composer-input" placeholder="Message the agents... (/ for commands, @ to mention)" rows="1" spellcheck="false"></textarea>
+        </div>
+        <select class="composer-project" id="composer-project">
+          <option value="">no tag</option>
+        </select>
+        <button class="composer-send" id="composer-send">Send</button>
+        <div class="mention-popup" id="mention-popup"></div>
+      </div>
+    </div>
+
+    <!-- Feature Requests Tab -->
+    <div class="tab-panel" id="panel-features">
+      <div class="fr-list" id="fr-list">
+        <div class="loading-state">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <span>Loading feature requests...</span>
+        </div>
+      </div>
+
+      <div class="fr-filters">
+        <select id="fr-status">
+          <option value="">All statuses</option>
+          <option value="open">Open</option>
+          <option value="accepted">Accepted</option>
+          <option value="built">Built</option>
+          <option value="declined">Declined</option>
+        </select>
+        <select id="fr-project"><option value="">All projects</option></select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Agent Edit Modal -->
+<div class="modal-overlay" id="modal-agent-edit">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Configure Agent</span>
+      <button class="modal-close" onclick="closeModal('modal-agent-edit')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label class="modal-label">Agent</label>
+        <input class="modal-input" id="edit-agent-name" disabled>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">CLI Type</label>
+        <span class="modal-sublabel">Which CLI tool this agent runs in</span>
+        <select class="modal-select" id="edit-cli-type">
+          <option value="">None</option>
+          <option value="claude">Claude Code</option>
+          <option value="opencode">OpenCode</option>
+          <option value="codex">Codex</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Working Directory</label>
+        <span class="modal-sublabel">Project root the agent operates in (auto-detected on register)</span>
+        <input class="modal-input" id="edit-working-dir" placeholder="e.g. B:\projects\sides\talkto" spellcheck="false">
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Session ID</label>
+        <span class="modal-sublabel">Auto-discovered from CLI session store. Override only if needed.</span>
+        <input class="modal-input" id="edit-session-id" placeholder="Auto-discovered..." spellcheck="false">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-secondary" onclick="closeModal('modal-agent-edit')">Cancel</button>
+      <button class="modal-btn modal-btn-secondary" id="edit-rescan-btn" onclick="rescanSession()">Rescan</button>
+      <button class="modal-btn modal-btn-primary" id="edit-save-btn" onclick="saveAgentConfig()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Direct Invoke Modal -->
+<div class="modal-overlay" id="modal-direct">
+  <div class="modal" style="width:560px">
+    <div class="modal-header">
+      <span class="modal-title" id="direct-title">Direct Invoke</span>
+      <button class="modal-close" onclick="closeModal('modal-direct')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="direct-info" style="font-family:var(--font-mono);font-size:0.68rem;color:hsl(var(--muted-foreground));margin-bottom:12px;padding:8px 10px;background:hsl(var(--muted)/0.3);border-radius:var(--radius);"></div>
+      <div class="modal-field">
+        <label class="modal-label">Prompt</label>
+        <span class="modal-sublabel">This will be sent to the agent and posted to chat</span>
+        <textarea class="modal-textarea" id="direct-prompt" rows="4" placeholder="What do you want this agent to do?" spellcheck="false"></textarea>
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Delivery Mode</label>
+        <select class="modal-select" id="direct-mode">
+          <option value="auto">Auto (Smart Pull → Subprocess fallback)</option>
+          <option value="smart_pull">Smart Pull only (in-band, waits for agent)</option>
+          <option value="subprocess">Subprocess only (immediate, spawns CLI)</option>
+        </select>
+      </div>
+      <div id="direct-response-container"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-secondary" onclick="closeModal('modal-direct')">Close</button>
+      <button class="modal-btn modal-btn-primary" id="direct-send-btn" onclick="sendDirect()">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Theme ──
+function getTheme() { return localStorage.getItem('talkto-theme') || 'dark'; }
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('talkto-theme', t);
+}
+setTheme(getTheme());
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  setTheme(getTheme() === 'dark' ? 'light' : 'dark');
+  drawAgents();
+  drawMessages();
+});
+
+// ── Agent colors: dual palette for light/dark ──
+const COLORS_DARK = [
+  '#f87171','#fb923c','#fbbf24','#a3e635','#34d399',
+  '#22d3ee','#60a5fa','#a78bfa','#e879f9','#fb7185',
+  '#f97316','#facc15','#4ade80','#2dd4bf','#38bdf8',
+  '#818cf8','#c084fc','#f472b6','#94a3b8','#67e8f9'
+];
+const COLORS_LIGHT = [
+  '#dc2626','#ea580c','#ca8a04','#65a30d','#059669',
+  '#0891b2','#2563eb','#7c3aed','#c026d3','#e11d48',
+  '#c2410c','#a16207','#16a34a','#0d9488','#0284c7',
+  '#4f46e5','#9333ea','#db2777','#475569','#0e7490'
+];
+
+function hash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function color(name) {
+  const pal = getTheme() === 'dark' ? COLORS_DARK : COLORS_LIGHT;
+  return pal[hash(name) % pal.length];
+}
+
+function initials(name) {
+  const p = name.replace(/[^a-zA-Z0-9\s_-]/g, '').split(/[\s_-]+/);
+  return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
+}
+
+function fmtTime(d) { return new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }); }
+
+function fmtDate(d) {
+  const dt = new Date(d), now = new Date(), y = new Date(now);
+  y.setDate(y.getDate() - 1);
+  if (dt.toDateString() === now.toDateString()) return 'Today';
+  if (dt.toDateString() === y.toDateString()) return 'Yesterday';
+  return dt.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function statusDot(ls) {
+  if (!ls) return '#3f3f46';
+  const s = (Date.now() - new Date(ls).getTime()) / 1000;
+  if (s < 300) return '#22c55e';
+  if (s < 3600) return '#eab308';
+  return '#3f3f46';
+}
+
+function esc(s) { const e = document.createElement('span'); e.textContent = s; return e.innerHTML; }
+
+// ── Lightweight Markdown renderer ──
+function md(raw) {
+  // Escape HTML first
+  let t = esc(raw);
+
+  // Fenced code blocks: ```lang\n...\n```
+  t = t.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    const l = lang ? `<span class="md-code-lang">${lang}</span>` : '';
+    return `<div class="md-codeblock">${l}<pre><code>${code.replace(/\n$/, '')}</code></pre></div>`;
+  });
+  // Fallback fenced code blocks without newline after lang
+  t = t.replace(/```([\s\S]*?)```/g, (_, code) => {
+    return `<div class="md-codeblock"><pre><code>${code.replace(/^\n/, '').replace(/\n$/, '')}</code></pre></div>`;
+  });
+
+  // Now process line by line for block elements, but preserve code blocks
+  const codeBlocks = [];
+  t = t.replace(/<div class="md-codeblock">[\s\S]*?<\/div>/g, m => {
+    codeBlocks.push(m);
+    return `\x00CB${codeBlocks.length - 1}\x00`;
+  });
+
+  const lines = t.split('\n');
+  const out = [];
+  let inList = false, listType = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+
+    // Code block placeholder - pass through
+    if (line.match(/\x00CB\d+\x00/)) {
+      if (inList) { out.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+      out.push(line);
+      continue;
+    }
+
+    // Headers
+    if (/^#### (.+)$/.test(line)) { if (inList) { out.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; } out.push(`<h4 class="md-h4">${inline(line.slice(5))}</h4>`); continue; }
+    if (/^### (.+)$/.test(line)) { if (inList) { out.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; } out.push(`<h3 class="md-h3">${inline(line.slice(4))}</h3>`); continue; }
+    if (/^## (.+)$/.test(line)) { if (inList) { out.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; } out.push(`<h2 class="md-h2">${inline(line.slice(3))}</h2>`); continue; }
+    if (/^# (.+)$/.test(line)) { if (inList) { out.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; } out.push(`<h1 class="md-h1">${inline(line.slice(2))}</h1>`); continue; }
+
+    // Horizontal rule
+    if (/^(-{3,}|_{3,}|\*{3,})$/.test(line.trim())) { if (inList) { out.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; } out.push('<hr class="md-hr">'); continue; }
+
+    // Blockquote
+    if (/^> (.+)$/.test(line)) { if (inList) { out.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; } out.push(`<blockquote class="md-bq">${inline(line.slice(2))}</blockquote>`); continue; }
+
+    // Unordered list
+    const ulMatch = line.match(/^(\s*)[-*] (.+)$/);
+    if (ulMatch) {
+      if (!inList || listType !== 'ul') { if (inList) out.push(listType === 'ul' ? '</ul>' : '</ol>'); out.push('<ul class="md-list">'); inList = true; listType = 'ul'; }
+      out.push(`<li>${inline(ulMatch[2])}</li>`);
+      continue;
+    }
+
+    // Ordered list
+    const olMatch = line.match(/^(\s*)\d+[.)] (.+)$/);
+    if (olMatch) {
+      if (!inList || listType !== 'ol') { if (inList) out.push(listType === 'ul' ? '</ul>' : '</ol>'); out.push('<ol class="md-list">'); inList = true; listType = 'ol'; }
+      out.push(`<li>${inline(olMatch[2])}</li>`);
+      continue;
+    }
+
+    // Close list if open
+    if (inList && line.trim() === '') { out.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+
+    // Empty line
+    if (line.trim() === '') { continue; }
+
+    // Regular paragraph
+    if (inList) { out.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+    out.push(`<p class="md-p">${inline(line)}</p>`);
+  }
+
+  if (inList) out.push(listType === 'ul' ? '</ul>' : '</ol>');
+
+  let result = out.join('\n');
+
+  // Restore code blocks
+  result = result.replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[parseInt(i)]);
+
+  return result;
+}
+
+// Inline markdown: bold, italic, code, links, strikethrough, @mentions
+function inline(t) {
+  // Inline code (must be first to prevent inner processing)
+  const codes = [];
+  t = t.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return `\x01IC${codes.length - 1}\x01`; });
+
+  // Bold+italic
+  t = t.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  // Bold
+  t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  // Italic
+  t = t.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  t = t.replace(/_(.+?)_/g, '<em>$1</em>');
+  // Strikethrough
+  t = t.replace(/~~(.+?)~~/g, '<del>$1</del>');
+  // Links [text](url)
+  t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a class="md-link" href="$2" target="_blank" rel="noopener">$1</a>');
+  // Bare URLs
+  t = t.replace(/(^|[\s(])(https?:\/\/[^\s)<]+)/g, '$1<a class="md-link" href="$2" target="_blank" rel="noopener">$2</a>');
+  // @mentions
+  t = t.replace(/@([\w][\w.-]*)/g, '<span class="mention">@$1</span>');
+
+  // Restore inline code
+  t = t.replace(/\x01IC(\d+)\x01/g, (_, i) => `<code class="md-code">${codes[parseInt(i)]}</code>`);
+
+  return t;
+}
+
+// Backward compat: hl() still used for join/system msgs (simple one-liners)
+function hl(t) { return inline(esc(t)); }
+
+// ── State ──
+let agents = [], messages = [], lastId = null, days = 7, backendStatus = null;
+
+const $msg = document.getElementById('messages');
+const $agents = document.getElementById('agent-list');
+const $search = document.getElementById('search');
+const $fAgent = document.getElementById('f-agent');
+const $fProj = document.getElementById('f-project');
+const $refresh = document.getElementById('refresh');
+const $msgCount = document.getElementById('msg-count');
+const $agentCount = document.getElementById('agent-count');
+const $sideCount = document.getElementById('sidebar-count');
+
+// ── Fetch ──
+async function loadAgents() {
+  try {
+    const [agentRes, backendRes] = await Promise.all([
+      fetch('/api/agents'),
+      fetch('/api/backends').catch(() => null),
+    ]);
+    if (!agentRes.ok) return;
+    agents = await agentRes.json();
+    if (backendRes && backendRes.ok) backendStatus = await backendRes.json();
+    drawAgents();
+    fillFilters();
+    $agentCount.textContent = agents.length;
+    $sideCount.textContent = agents.length;
+  } catch (e) { console.warn('agents:', e); }
+}
+
+async function loadMessages() {
+  try {
+    $refresh.classList.add('loading');
+    const r = await fetch(`/api/messages?limit=200&days=${days}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    messages = (Array.isArray(d) ? d : []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    drawMessages();
+    $msgCount.textContent = messages.length;
+    const nid = messages.length ? messages[messages.length - 1].id : null;
+    if (nid !== lastId) { scrollDown(); lastId = nid; }
+  } catch (e) { console.warn('messages:', e); }
+  finally { $refresh.classList.remove('loading'); }
+}
+
+// ── Draw agents ──
+function drawAgents() {
+  if (!agents.length) { $agents.innerHTML = '<div class="empty">No agents yet</div>'; return; }
+  const sorted = [...agents].sort((a, b) => {
+    const ao = online(a), bo = online(b);
+    if (ao !== bo) return bo - ao;
+    return a.name.localeCompare(b.name);
+  });
+  $agents.innerHTML = sorted.map(a => {
+    const c = color(a.name), ini = initials(a.name), dot = statusDot(a.last_seen);
+    const cliBadge = a.cli_type ? `<span class="agent-cli-badge">${esc(a.cli_type)}</span>` : '';
+    // Backend type indicator: green for opencode_server (persistent), amber for subprocess
+    let backendBadge = '';
+    if (a.cli_type && a.name !== 'yash') {
+      const ocRunning = backendStatus && backendStatus.opencode_server && backendStatus.opencode_server.status === 'running';
+      if (a.cli_type === 'opencode' && ocRunning) {
+        backendBadge = `<span class="agent-backend-badge backend-persistent" title="Persistent backend (opencode serve)">SERVE</span>`;
+      } else if (a.cli_type) {
+        backendBadge = `<span class="agent-backend-badge backend-subprocess" title="Subprocess backend (one-shot per message)">PROC</span>`;
+      }
+    }
+    const canDirect = a.name !== 'yash';
+    const directBtn = canDirect
+      ? `<button class="agent-action-btn direct-btn" onclick="openDirect('${esc(a.name)}')">Direct</button>`
+      : '';
+    const editBtn = a.name !== 'yash'
+      ? `<button class="agent-action-btn" onclick="openAgentEdit('${esc(a.name)}')">Config</button>`
+      : '';
+    // Show last folder from working_dir
+    const wdShort = a.working_dir ? a.working_dir.split(/[/\\]/).filter(Boolean).pop() || '' : '';
+    const wdLine = a.working_dir
+      ? `<div class="agent-workdir" title="${esc(a.working_dir)}">${esc(wdShort)}</div>`
+      : '';
+    return `<div class="agent-card">
+      <div class="agent-top">
+        <div class="avatar" style="background:${c}18;color:${c}">
+          ${ini}
+          <div class="dot" style="background:${dot}"></div>
+        </div>
+        <div class="agent-meta">
+          <div class="agent-name" style="color:${c}">${esc(a.name)}${cliBadge}${backendBadge}</div>
+          ${a.project ? `<div class="agent-project">${esc(a.project)}</div>` : ''}
+        </div>
+      </div>
+      ${a.bio ? `<div class="agent-bio">${esc(a.bio)}</div>` : ''}
+      ${a.personality ? `<div class="agent-vibe">${esc(a.personality)}</div>` : ''}
+      ${wdLine}
+      <div class="agent-actions">${editBtn}${directBtn}</div>
+    </div>`;
+  }).join('');
+}
+
+function online(a) { return a.last_seen && (Date.now() - new Date(a.last_seen).getTime()) < 300000; }
+
+// ── Draw messages ──
+function drawMessages() {
+  const q = $search.value.toLowerCase().trim();
+  const fa = $fAgent.value, fp = $fProj.value;
+
+  const filtered = messages.filter(m => {
+    if (fa && m.agent_name !== fa) return false;
+    if (fp && (m.project_tag || '') !== fp) return false;
+    if (q && !((m.content || '') + ' ' + (m.agent_name || '')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  if (!filtered.length) { $msg.innerHTML = '<div class="empty">No messages found</div>'; return; }
+
+  let html = '', lastDate = '';
+
+  filtered.forEach(m => {
+    const ts = m.created_at || '';
+    const d = ts ? fmtDate(ts) : '';
+    if (d && d !== lastDate) { html += `<div class="date-sep">${d}</div>`; lastDate = d; }
+
+    const type = (m.message_type || 'chat').toLowerCase();
+    const agent = m.agent_name || 'system';
+    const body = m.content || '';
+    const proj = m.project_tag || '';
+
+    if (type === 'join') {
+      html += `<div class="msg msg-join">
+        <span class="join-arrow">+</span>
+        <span class="join-text">${hl(body)}</span>
+        ${ts ? `<span class="msg-time">${fmtTime(ts)}</span>` : ''}
+      </div>`;
+    } else if (type === 'system') {
+      html += `<div class="msg msg-sys">
+        <span class="sys-label">system</span>
+        ${hl(body)}
+        ${ts ? `<span class="msg-time" style="float:right">${fmtTime(ts)}</span>` : ''}
+      </div>`;
+    } else {
+      const c = color(agent);
+      html += `<div class="msg">
+        <div class="msg-head">
+          <span class="msg-sender" style="color:${c}">${esc(agent)}</span>
+          ${proj ? `<span class="msg-tag">${esc(proj)}</span>` : ''}
+          ${ts ? `<span class="msg-time">${fmtTime(ts)}</span>` : ''}
+        </div>
+        <div class="msg-body">${md(body)}</div>
+      </div>`;
+    }
+  });
+
+  $msg.innerHTML = html;
+}
+
+// ── Filters ──
+function fillFilters() {
+  const ca = $fAgent.value, cp = $fProj.value;
+  const names = [...new Set(agents.map(a => a.name).filter(Boolean))].sort();
+  $fAgent.innerHTML = '<option value="">All agents</option>' + names.map(n => `<option value="${esc(n)}" ${n === ca ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  const projs = [...new Set([
+    ...agents.map(a => a.project),
+    ...messages.map(m => m.project_tag)
+  ].filter(Boolean))].sort();
+  $fProj.innerHTML = '<option value="">All projects</option>' + projs.map(p => `<option value="${esc(p)}" ${p === cp ? 'selected' : ''}>${esc(p)}</option>`).join('');
+  if (typeof fillFrProjectFilter === 'function') fillFrProjectFilter();
+  if (typeof fillComposerProjects === 'function') fillComposerProjects();
+}
+
+function scrollDown() { requestAnimationFrame(() => { $msg.scrollTop = $msg.scrollHeight; }); }
+
+// ── Events ──
+$search.addEventListener('input', drawMessages);
+$fAgent.addEventListener('change', drawMessages);
+$fProj.addEventListener('change', drawMessages);
+
+document.querySelectorAll('.day-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.day-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    days = parseInt(b.dataset.d, 10);
+    loadMessages();
+  });
+});
+
+$refresh.addEventListener('click', () => { loadAgents(); loadMessages(); });
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { $search.value = ''; drawMessages(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); $search.focus(); $search.select(); }
+});
+
+// ── Tabs ──
+const $tabs = document.querySelectorAll('.tab-btn');
+const $panels = document.querySelectorAll('.tab-panel');
+let activeTab = 'chat';
+
+$tabs.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    activeTab = tab;
+    $tabs.forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    $panels.forEach(p => p.classList.remove('active'));
+    document.getElementById(`panel-${tab}`).classList.add('active');
+    if (tab === 'features') loadFeatureRequests();
+  });
+});
+
+// ── Feature Requests ──
+let featureRequests = [];
+const $frList = document.getElementById('fr-list');
+const $frCount = document.getElementById('fr-count');
+const $frStatus = document.getElementById('fr-status');
+const $frProject = document.getElementById('fr-project');
+
+async function loadFeatureRequests() {
+  try {
+    const status = $frStatus.value;
+    const project = $frProject.value;
+    let url = '/api/feature-requests?limit=50';
+    if (status) url += `&status=${encodeURIComponent(status)}`;
+    if (project) url += `&project=${encodeURIComponent(project)}`;
+    const r = await fetch(url);
+    if (!r.ok) return;
+    featureRequests = await r.json();
+    $frCount.textContent = featureRequests.length;
+    drawFeatureRequests();
+  } catch (e) { console.warn('feature-requests:', e); }
+}
+
+function drawFeatureRequests() {
+  if (!featureRequests.length) {
+    $frList.innerHTML = '<div class="empty">No feature requests yet. Agents can submit them via the submit_feature_request tool.</div>';
+    return;
+  }
+
+  $frList.innerHTML = featureRequests.map(fr => {
+    const c = color(fr.agent_name);
+    const statusClass = `fr-status-${fr.status}`;
+    const ts = fr.created_at ? new Date(fr.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+    const voters = (fr.voters || []).length > 0
+      ? `<div class="fr-voters">Voted: ${fr.voters.map(v => `<span style="color:${color(v)}">${esc(v)}</span>`).join(', ')}</div>`
+      : '';
+
+    return `<div class="fr-card">
+      <div class="fr-card-head">
+        <div class="fr-votes">
+          <div class="fr-vote-count">${fr.vote_count}</div>
+          <div class="fr-vote-label">vote${fr.vote_count !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="fr-content">
+          <div class="fr-title">${esc(fr.title)}</div>
+          <div class="fr-desc">${esc(fr.description)}</div>
+          <div class="fr-meta">
+            <span class="fr-status ${statusClass}">${fr.status}</span>
+            ${fr.project ? `<span class="fr-project-tag">${esc(fr.project)}</span>` : ''}
+            <span class="fr-meta-item">by <span style="color:${c};font-weight:600">${esc(fr.agent_name)}</span></span>
+            ${ts ? `<span class="fr-meta-item">${ts}</span>` : ''}
+            <span class="fr-meta-item" style="opacity:0.6">id: ${fr.id}</span>
+          </div>
+          ${voters}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$frStatus.addEventListener('change', loadFeatureRequests);
+$frProject.addEventListener('change', loadFeatureRequests);
+
+// Fill FR project filter from agents
+function fillFrProjectFilter() {
+  const cp = $frProject.value;
+  const projs = [...new Set(agents.map(a => a.project).filter(Boolean))].sort();
+  $frProject.innerHTML = '<option value="">All projects</option>' + projs.map(p => `<option value="${esc(p)}" ${p === cp ? 'selected' : ''}>${esc(p)}</option>`).join('');
+}
+
+// ── Composer ──
+const $compInput = document.getElementById('composer-input');
+const $compSend = document.getElementById('composer-send');
+const $compProject = document.getElementById('composer-project');
+const $mentionPopup = document.getElementById('mention-popup');
+const $composerChips = document.getElementById('composer-chips');
+
+function fillComposerProjects() {
+  const cp = $compProject.value;
+  const projs = [...new Set([
+    ...agents.map(a => a.project),
+    ...messages.map(m => m.project_tag)
+  ].filter(Boolean))].sort();
+  $compProject.innerHTML = '<option value="">no tag</option>' + projs.map(p =>
+    `<option value="${esc(p)}" ${p === cp ? 'selected' : ''}>${esc(p)}</option>`
+  ).join('');
+}
+
+// ── Slash Command & Chip State ──
+let composerCommand = null;   // { cmd: '/direct'|'/project'|'/status'|'/clear', target: string|null }
+let composerChips = [];       // [{ type: 'cmd'|'agent'|'project', value: string }]
+let cmdPopupIdx = 0;
+let projectPopupIdx = 0;
+let projectPopupActive = false;
+
+const COMMANDS = [
+  { name: '/direct', desc: 'Send a prompt directly to an agent\'s CLI' },
+  { name: '/project', desc: 'Get project intel' },
+  { name: '/status', desc: 'Update your status' },
+  { name: '/clear', desc: 'Clear the chat view' },
+];
+
+// ── Chip Management ──
+function addChip(type, value) {
+  // Prevent duplicate chips
+  if (composerChips.some(c => c.type === type && c.value === value)) return;
+  composerChips.push({ type, value });
+  renderChips();
+}
+
+function removeChip(index) {
+  const chip = composerChips[index];
+  if (!chip) return;
+
+  // If removing a command chip, cancel entire command
+  if (chip.type === 'cmd') {
+    composerCommand = null;
+    composerChips = [];
+    $compInput.placeholder = 'Message the agents... (/ for commands, @ to mention)';
+    renderChips();
+    return;
+  }
+
+  // If removing an agent chip, also remove @name from textarea
+  if (chip.type === 'agent') {
+    const mention = '@' + chip.value;
+    const text = $compInput.value;
+    // Remove the mention (with optional trailing space)
+    $compInput.value = text.replace(new RegExp('@' + chip.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s?', 'g'), '').trim();
+  }
+
+  composerChips.splice(index, 1);
+  renderChips();
+}
+
+function renderChips() {
+  if (!composerChips.length) {
+    $composerChips.innerHTML = '';
+    $composerChips.classList.remove('has-chips');
+    return;
+  }
+
+  $composerChips.classList.add('has-chips');
+  $composerChips.innerHTML = composerChips.map((chip, i) => {
+    let cls = '', style = '', label = '';
+    if (chip.type === 'cmd') {
+      cls = 'chip chip-cmd';
+      label = chip.value;
+    } else if (chip.type === 'agent') {
+      cls = 'chip chip-agent';
+      const c = color(chip.value);
+      style = `color:${c};background:${c}18;`;
+      label = '@' + chip.value;
+    } else if (chip.type === 'project') {
+      cls = 'chip chip-project';
+      label = '#' + chip.value;
+    }
+    return `<span class="${cls}" style="${style}">${esc(label)}<button class="chip-close" data-idx="${i}">&times;</button></span>`;
+  }).join('');
+
+  // Attach close handlers
+  $composerChips.querySelectorAll('.chip-close').forEach(btn => {
+    btn.addEventListener('mousedown', e => {
+      e.preventDefault();
+      removeChip(parseInt(btn.dataset.idx));
+    });
+  });
+}
+
+function clearComposerState() {
+  composerCommand = null;
+  composerChips = [];
+  $compInput.value = '';
+  $compInput.style.height = 'auto';
+  $compInput.placeholder = 'Message the agents... (/ for commands, @ to mention)';
+  renderChips();
+}
+
+// ── Slash Command Detection ──
+function checkSlashCommand() {
+  const text = $compInput.value;
+  // Only show command popup if "/" is at start and no command is active
+  if (composerCommand) return;
+
+  if (text.startsWith('/')) {
+    const query = text.slice(1).toLowerCase().split(/\s/)[0];
+    // If there's a space, user already typed a full command word - try to auto-select
+    if (text.includes(' ') && !composerCommand) {
+      const match = COMMANDS.find(c => c.name === '/' + query);
+      if (match) {
+        selectCommand(match.name);
+        // Remove the command prefix from input, keep the rest
+        $compInput.value = text.slice(match.name.length).trimStart();
+        return;
+      }
+    }
+    showCommandPopup(query);
+  } else {
+    hideCommandPopup();
+  }
+}
+
+function showCommandPopup(query) {
+  const filtered = COMMANDS.filter(c => c.name.toLowerCase().includes('/' + (query || '')));
+  if (!filtered.length) { hideCommandPopup(); return; }
+
+  cmdPopupIdx = 0;
+
+  $mentionPopup.innerHTML = filtered.map((c, i) => {
+    return `<div class="cmd-item${i === 0 ? ' active' : ''}" data-cmd="${c.name}">
+      <span class="cmd-name">${esc(c.name)}</span>
+      <span class="cmd-desc">${esc(c.desc)}</span>
+    </div>`;
+  }).join('');
+
+  // Position above composer
+  const composerRect = $compInput.closest('.composer').getBoundingClientRect();
+  const inputRect = $compInput.getBoundingClientRect();
+  const inputOffsetLeft = inputRect.left - composerRect.left;
+  $mentionPopup.style.left = inputOffsetLeft + 'px';
+  $mentionPopup.style.bottom = (composerRect.height - (inputRect.top - composerRect.top) + 4) + 'px';
+  $mentionPopup.style.top = 'auto';
+  $mentionPopup.style.minWidth = '280px';
+
+  $mentionPopup.classList.add('visible');
+
+  $mentionPopup.querySelectorAll('.cmd-item').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      selectCommand(el.dataset.cmd);
+      $compInput.value = '';
+      $compInput.focus();
+    });
+  });
+}
+
+function hideCommandPopup() {
+  if ($mentionPopup.querySelector('.cmd-item')) {
+    $mentionPopup.classList.remove('visible');
+    $mentionPopup.style.minWidth = '180px';
+  }
+}
+
+function isCommandPopupVisible() {
+  return $mentionPopup.classList.contains('visible') && $mentionPopup.querySelector('.cmd-item');
+}
+
+function isProjectPopupVisible() {
+  return $mentionPopup.classList.contains('visible') && $mentionPopup.querySelector('.project-item');
+}
+
+function selectCommand(cmd) {
+  hideCommandPopup();
+  composerCommand = { cmd, target: null };
+
+  // /clear executes immediately
+  if (cmd === '/clear') {
+    handleClear();
+    return;
+  }
+
+  addChip('cmd', cmd);
+
+  if (cmd === '/direct') {
+    $compInput.value = '';
+    $compInput.placeholder = 'Type @ to select agent...';
+  } else if (cmd === '/project') {
+    $compInput.value = '';
+    $compInput.placeholder = 'Type project name or select...';
+    // Show project popup immediately
+    setTimeout(() => showProjectPopup(''), 50);
+  } else if (cmd === '/status') {
+    $compInput.value = '';
+    $compInput.placeholder = 'Type your new status...';
+  }
+  $compInput.focus();
+}
+
+// ── Project Popup ──
+function showProjectPopup(query) {
+  const projs = [...new Set(agents.map(a => a.project).filter(Boolean))].sort();
+  const filtered = projs.filter(p => p.toLowerCase().includes(query.toLowerCase()));
+
+  if (!filtered.length) { hideProjectPopup(); return; }
+
+  projectPopupActive = true;
+  projectPopupIdx = 0;
+
+  $mentionPopup.innerHTML = filtered.map((p, i) => {
+    return `<div class="project-item${i === 0 ? ' active' : ''}" data-project="${esc(p)}">
+      <span class="project-item-name">#${esc(p)}</span>
+    </div>`;
+  }).join('');
+
+  const composerRect = $compInput.closest('.composer').getBoundingClientRect();
+  const inputRect = $compInput.getBoundingClientRect();
+  const inputOffsetLeft = inputRect.left - composerRect.left;
+  $mentionPopup.style.left = inputOffsetLeft + 'px';
+  $mentionPopup.style.bottom = (composerRect.height - (inputRect.top - composerRect.top) + 4) + 'px';
+  $mentionPopup.style.top = 'auto';
+  $mentionPopup.style.minWidth = '200px';
+
+  $mentionPopup.classList.add('visible');
+
+  $mentionPopup.querySelectorAll('.project-item').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      selectProject(el.dataset.project);
+    });
+  });
+}
+
+function hideProjectPopup() {
+  projectPopupActive = false;
+  if ($mentionPopup.querySelector('.project-item')) {
+    $mentionPopup.classList.remove('visible');
+    $mentionPopup.style.minWidth = '180px';
+  }
+}
+
+function selectProject(name) {
+  hideProjectPopup();
+  if (composerCommand && composerCommand.cmd === '/project') {
+    composerCommand.target = name;
+    addChip('project', name);
+    $compInput.value = '';
+    $compInput.placeholder = 'Press Enter to get project intel...';
+  }
+  $compInput.focus();
+}
+
+// ── Send Logic ──
+async function handleSend() {
+  // If a command is active via chip flow, route to the appropriate handler
+  if (composerCommand) {
+    const cmd = composerCommand.cmd;
+    if (cmd === '/direct') return handleDirectSend();
+    if (cmd === '/project') return handleProjectSend();
+    if (cmd === '/status') return handleStatusSend();
+    if (cmd === '/clear') return handleClear();
+  }
+
+  // Also detect inline /commands typed directly (no chip flow used)
+  const raw = $compInput.value.trim();
+  let parsed = null;
+  if (raw.startsWith('/')) {
+    parsed = parseInlineCommand(raw);
+  } else if (raw.startsWith('@')) {
+    parsed = parseReverseCommand(raw);
+  }
+
+  if (parsed) {
+    // Set up composerCommand + chips from parsed result, then dispatch
+    composerCommand = { cmd: parsed.cmd, target: parsed.target };
+    if (parsed.target) addChip('agent', parsed.target);
+    addChip('cmd', parsed.cmd);
+    // Put remaining prompt back in the input
+    $compInput.value = parsed.body;
+    if (parsed.cmd === '/direct') return handleDirectSend();
+    if (parsed.cmd === '/project') return handleProjectSend();
+    if (parsed.cmd === '/status') return handleStatusSend();
+    if (parsed.cmd === '/clear') return handleClear();
+  }
+
+  // Otherwise, normal message send
+  return sendMessage();
+}
+
+// Parse "/command @target rest of text" or "@target /command rest" from raw input
+function parseInlineCommand(text) {
+  // /direct @agent-name prompt text
+  const directMatch = text.match(/^\/direct\s+@([\w][\w.-]*)\s*([\s\S]*)$/i);
+  if (directMatch) {
+    return { cmd: '/direct', target: directMatch[1], body: directMatch[2].trim() };
+  }
+  // /direct without @mention - still try to match
+  const directNoAgent = text.match(/^\/direct\s+([\s\S]*)$/i);
+  if (directNoAgent) {
+    return { cmd: '/direct', target: null, body: directNoAgent[1].trim() };
+  }
+  // /project name
+  const projectMatch = text.match(/^\/project\s+([\s\S]*)$/i);
+  if (projectMatch) {
+    return { cmd: '/project', target: null, body: projectMatch[1].trim() };
+  }
+  // /status text
+  const statusMatch = text.match(/^\/status\s+([\s\S]*)$/i);
+  if (statusMatch) {
+    return { cmd: '/status', target: null, body: statusMatch[1].trim() };
+  }
+  // /clear
+  if (/^\/clear\s*$/i.test(text)) {
+    return { cmd: '/clear', target: null, body: '' };
+  }
+  return null;
+}
+
+// Also detect "@agent /direct prompt" pattern (reverse order)
+function parseReverseCommand(text) {
+  const m = text.match(/^@([\w][\w.-]*)\s+\/direct\s+([\s\S]*)$/i);
+  if (m) return { cmd: '/direct', target: m[1], body: m[2].trim() };
+  return null;
+}
+
+async function sendMessage() {
+  const content = $compInput.value.trim();
+  if (!content) return;
+
+  $compSend.disabled = true;
+  $compSend.textContent = '...';
+
+  try {
+    const body = { content };
+    const proj = $compProject.value;
+    if (proj) body.project_tag = proj;
+
+    const r = await fetch('/api/messages/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (r.ok) {
+      clearComposerState();
+      await loadMessages();
+      scrollDown();
+    } else {
+      const err = await r.json();
+      console.error('Send failed:', err);
+    }
+  } catch (e) {
+    console.error('Send error:', e);
+  } finally {
+    $compSend.disabled = false;
+    $compSend.textContent = 'Send';
+  }
+}
+
+async function handleDirectSend() {
+  // Find the agent target from chips
+  const agentChip = composerChips.find(c => c.type === 'agent');
+  if (!agentChip) {
+    // Check if there's an @mention in the text
+    const mentionMatch = $compInput.value.match(/@([\w][\w.-]*)/);
+    if (mentionMatch) {
+      composerCommand.target = mentionMatch[1];
+      addChip('agent', mentionMatch[1]);
+    } else {
+      $compInput.placeholder = 'You need to @mention an agent first...';
+      return;
+    }
+  }
+
+  const agentName = agentChip ? agentChip.value : composerCommand.target;
+  // Get the prompt: the textarea content minus any @mentions
+  let prompt = $compInput.value.replace(/@[\w][\w.-]*/g, '').trim();
+  if (!prompt) {
+    $compInput.placeholder = 'Type a prompt for the agent...';
+    return;
+  }
+
+  $compSend.disabled = true;
+  $compSend.textContent = 'Running...';
+
+  // Show temporary message in chat
+  const tempId = 'temp-direct-' + Date.now();
+  const tempHtml = `<div class="msg msg-sys" id="${tempId}">
+    <span class="sys-label">direct</span>
+    Sending to <strong>@${esc(agentName)}</strong>... waiting for response.
+    <div class="dots" style="display:inline-flex;margin-left:8px;vertical-align:middle"><span></span><span></span><span></span></div>
+  </div>`;
+  $msg.insertAdjacentHTML('beforeend', tempHtml);
+  scrollDown();
+
+  try {
+    const r = await fetch('/api/direct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_name: agentName,
+        prompt,
+        post_to_chat: true,
+        timeout: 120,
+      }),
+    });
+
+    const data = await r.json();
+    const tempEl = document.getElementById(tempId);
+
+    if (r.ok && data.ok) {
+      if (tempEl) tempEl.remove();
+      clearComposerState();
+      await loadMessages();
+      scrollDown();
+    } else {
+      const errMsg = data.error || data.output || 'Unknown error';
+      if (tempEl) {
+        tempEl.innerHTML = `<span class="sys-label" style="color:#f87171">error</span> Direct to <strong>@${esc(agentName)}</strong> failed: ${esc(errMsg)}`;
+      }
+      clearComposerState();
+    }
+  } catch (e) {
+    const tempEl = document.getElementById(tempId);
+    if (tempEl) {
+      tempEl.innerHTML = `<span class="sys-label" style="color:#f87171">error</span> Network error: ${esc(e.message)}`;
+    }
+    clearComposerState();
+  } finally {
+    $compSend.disabled = false;
+    $compSend.textContent = 'Send';
+  }
+}
+
+async function handleProjectSend() {
+  const projectChip = composerChips.find(c => c.type === 'project');
+  const projectName = projectChip ? projectChip.value : $compInput.value.trim();
+
+  if (!projectName) {
+    $compInput.placeholder = 'Type or select a project name...';
+    return;
+  }
+
+  $compSend.disabled = true;
+  $compSend.textContent = '...';
+
+  try {
+    // Fetch project agents and recent messages in parallel
+    const [agentsRes, msgsRes] = await Promise.all([
+      fetch(`/api/agents?project=${encodeURIComponent(projectName)}`),
+      fetch(`/api/messages?project=${encodeURIComponent(projectName)}&limit=10`),
+    ]);
+
+    let projAgents = [];
+    let projMsgs = [];
+    if (agentsRes.ok) projAgents = await agentsRes.json();
+    if (msgsRes.ok) projMsgs = await msgsRes.json();
+
+    // Build project intel display
+    let intelHtml = `<div class="msg msg-sys" style="border-left-color:#a78bfa">
+      <span class="sys-label" style="color:#a78bfa">project</span>
+      <strong>#${esc(projectName)}</strong>
+      <div style="margin-top:8px;font-size:0.8rem;line-height:1.6">`;
+
+    if (projAgents.length) {
+      intelHtml += `<div style="margin-bottom:6px"><strong>Agents (${projAgents.length}):</strong> `;
+      intelHtml += projAgents.map(a => `<span style="color:${color(a.name)};font-weight:600">${esc(a.name)}</span>`).join(', ');
+      intelHtml += '</div>';
+    } else {
+      intelHtml += '<div style="margin-bottom:6px;color:hsl(var(--muted-foreground))">No agents found for this project.</div>';
+    }
+
+    if (projMsgs.length) {
+      intelHtml += `<div><strong>Recent messages (${projMsgs.length}):</strong></div>`;
+      const sortedMsgs = projMsgs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      sortedMsgs.forEach(m => {
+        const c = color(m.agent_name || 'system');
+        const time = m.created_at ? fmtTime(m.created_at) : '';
+        const snippet = (m.content || '').slice(0, 120) + ((m.content || '').length > 120 ? '...' : '');
+        intelHtml += `<div style="margin:3px 0;font-size:0.78rem">
+          <span style="color:${c};font-weight:600">${esc(m.agent_name || 'system')}</span>
+          <span style="color:hsl(var(--muted-foreground));font-size:0.7rem;margin-left:4px">${time}</span>
+          <span style="color:hsl(var(--foreground)/0.8);margin-left:6px">${esc(snippet)}</span>
+        </div>`;
+      });
+    } else {
+      intelHtml += '<div style="color:hsl(var(--muted-foreground))">No recent messages.</div>';
+    }
+
+    intelHtml += '</div></div>';
+    $msg.insertAdjacentHTML('beforeend', intelHtml);
+    scrollDown();
+    clearComposerState();
+  } catch (e) {
+    console.error('Project intel error:', e);
+    $msg.insertAdjacentHTML('beforeend', `<div class="msg msg-sys" style="border-left-color:#f87171">
+      <span class="sys-label" style="color:#f87171">error</span> Failed to fetch project intel: ${esc(e.message)}
+    </div>`);
+    scrollDown();
+    clearComposerState();
+  } finally {
+    $compSend.disabled = false;
+    $compSend.textContent = 'Send';
+  }
+}
+
+async function handleStatusSend() {
+  const statusText = $compInput.value.trim();
+  if (!statusText) {
+    $compInput.placeholder = 'Type your new status...';
+    return;
+  }
+
+  $compSend.disabled = true;
+  $compSend.textContent = '...';
+
+  try {
+    const r = await fetch('/api/messages/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'updated status: ' + statusText }),
+    });
+
+    if (r.ok) {
+      clearComposerState();
+      await loadMessages();
+      scrollDown();
+    } else {
+      const err = await r.json();
+      console.error('Status update failed:', err);
+    }
+  } catch (e) {
+    console.error('Status error:', e);
+  } finally {
+    $compSend.disabled = false;
+    $compSend.textContent = 'Send';
+  }
+}
+
+function handleClear() {
+  $msg.innerHTML = `<div class="msg msg-sys">
+    <span class="sys-label">system</span>
+    Chat cleared. Refresh to reload.
+  </div>`;
+  clearComposerState();
+}
+
+// ── Composer Event Handlers ──
+$compSend.addEventListener('click', handleSend);
+
+$compInput.addEventListener('keydown', e => {
+  // Command popup navigation
+  if (isCommandPopupVisible()) {
+    const items = $mentionPopup.querySelectorAll('.cmd-item');
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[cmdPopupIdx].classList.remove('active');
+      cmdPopupIdx = (cmdPopupIdx + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[cmdPopupIdx].classList.add('active');
+      items[cmdPopupIdx].scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const selected = items[cmdPopupIdx];
+      if (selected) {
+        selectCommand(selected.dataset.cmd);
+        $compInput.value = '';
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      hideCommandPopup();
+      return;
+    }
+  }
+
+  // Project popup navigation
+  if (isProjectPopupVisible()) {
+    const items = $mentionPopup.querySelectorAll('.project-item');
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[projectPopupIdx].classList.remove('active');
+      projectPopupIdx = (projectPopupIdx + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[projectPopupIdx].classList.add('active');
+      items[projectPopupIdx].scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const selected = items[projectPopupIdx];
+      if (selected) selectProject(selected.dataset.project);
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      hideProjectPopup();
+      return;
+    }
+  }
+
+  // If mention popup is open, handle navigation
+  if ($mentionPopup.classList.contains('visible') && $mentionPopup.querySelector('.mention-item')) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateMention(e.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      selectMention();
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMention();
+      return;
+    }
+  }
+
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    handleSend();
+  }
+});
+
+// Auto-resize textarea
+$compInput.addEventListener('input', () => {
+  $compInput.style.height = 'auto';
+  $compInput.style.height = Math.min($compInput.scrollHeight, 200) + 'px';
+
+  // Check for slash commands first (only if no command is active)
+  if (!composerCommand) {
+    checkSlashCommand();
+  } else if (composerCommand.cmd === '/project' && !composerChips.find(c => c.type === 'project')) {
+    // If project command active but no project selected yet, show project popup
+    showProjectPopup($compInput.value.trim());
+  }
+
+  // Check for mentions
+  if (!isCommandPopupVisible() && !isProjectPopupVisible()) {
+    checkMention();
+  }
+});
+
+// ── Mention Autocomplete ──
+let mentionActive = false;
+let mentionStart = -1; // cursor position of the '@'
+let mentionIdx = 0;    // highlighted index
+
+function getMentionQuery() {
+  const pos = $compInput.selectionStart;
+  const text = $compInput.value;
+  // Walk back from cursor to find '@'
+  let i = pos - 1;
+  while (i >= 0) {
+    if (text[i] === '@') {
+      // Make sure it's at start or after a space/newline
+      if (i === 0 || /[\s\n]/.test(text[i - 1])) {
+        const query = text.slice(i + 1, pos).toLowerCase();
+        // Abort if there's a space in the query (mention is done)
+        if (/\s/.test(query)) return null;
+        return { start: i, query };
+      }
+      return null;
+    }
+    if (/[\s\n]/.test(text[i])) return null;
+    i--;
+  }
+  return null;
+}
+
+function checkMention() {
+  const m = getMentionQuery();
+  if (!m) { closeMention(); return; }
+
+  const matching = agents.filter(a =>
+    a.name !== 'yash' && a.name.toLowerCase().includes(m.query)
+  ).slice(0, 8);
+
+  if (!matching.length) { closeMention(); return; }
+
+  mentionActive = true;
+  mentionStart = m.start;
+  mentionIdx = 0;
+
+  $mentionPopup.innerHTML = matching.map((a, i) => {
+    const c = color(a.name);
+    const dot = statusDot(a.last_seen);
+    return `<div class="mention-item${i === 0 ? ' active' : ''}" data-name="${esc(a.name)}">
+      <span class="mention-item-dot" style="background:${dot}"></span>
+      <span class="mention-item-name" style="color:${c}">${esc(a.name)}</span>
+      <span class="mention-item-project">${esc(a.project || '')}</span>
+    </div>`;
+  }).join('');
+
+  // Position popup near the caret
+  positionMentionPopup();
+
+  $mentionPopup.classList.add('visible');
+
+  // Click handler on items
+  $mentionPopup.querySelectorAll('.mention-item').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault(); // prevent blur
+      insertMention(el.dataset.name);
+    });
+  });
+}
+
+function positionMentionPopup() {
+  // Create a hidden mirror div to measure caret position
+  const mirror = document.createElement('div');
+  const style = getComputedStyle($compInput);
+  mirror.style.cssText = `
+    position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;
+    font:${style.font};padding:${style.padding};border:${style.border};
+    width:${$compInput.offsetWidth}px;line-height:${style.lineHeight};
+    letter-spacing:${style.letterSpacing};
+  `;
+  const textBeforeCaret = $compInput.value.substring(0, $compInput.selectionStart);
+  mirror.textContent = textBeforeCaret;
+  const marker = document.createElement('span');
+  marker.textContent = '|';
+  mirror.appendChild(marker);
+  document.body.appendChild(mirror);
+
+  const inputRect = $compInput.getBoundingClientRect();
+  const markerRect = marker.getBoundingClientRect();
+  const mirrorRect = mirror.getBoundingClientRect();
+
+  // Caret offset relative to textarea
+  const caretLeft = markerRect.left - mirrorRect.left;
+  const caretTop = markerRect.top - mirrorRect.top;
+
+  document.body.removeChild(mirror);
+
+  // Position popup above the caret (inside .composer which is position:relative)
+  const composerRect = $compInput.closest('.composer').getBoundingClientRect();
+  const inputOffsetLeft = inputRect.left - composerRect.left;
+  const inputOffsetTop = inputRect.top - composerRect.top;
+
+  const popupLeft = inputOffsetLeft + caretLeft;
+  const popupBottom = composerRect.height - inputOffsetTop + 4;
+
+  $mentionPopup.style.left = Math.min(popupLeft, composerRect.width - 200) + 'px';
+  $mentionPopup.style.bottom = popupBottom + 'px';
+  $mentionPopup.style.top = 'auto';
+  $mentionPopup.style.minWidth = '180px';
+}
+
+function navigateMention(dir) {
+  const items = $mentionPopup.querySelectorAll('.mention-item');
+  if (!items.length) return;
+  items[mentionIdx].classList.remove('active');
+  mentionIdx = (mentionIdx + dir + items.length) % items.length;
+  items[mentionIdx].classList.add('active');
+  items[mentionIdx].scrollIntoView({ block: 'nearest' });
+}
+
+function selectMention() {
+  const items = $mentionPopup.querySelectorAll('.mention-item');
+  if (!items.length) return;
+  const name = items[mentionIdx].dataset.name;
+  insertMention(name);
+}
+
+function insertMention(name) {
+  const pos = $compInput.selectionStart;
+  const text = $compInput.value;
+  // Replace from mentionStart to cursor with @name + space
+  const before = text.slice(0, mentionStart);
+  const after = text.slice(pos);
+  const inserted = `@${name} `;
+  $compInput.value = before + inserted + after;
+  const newPos = mentionStart + inserted.length;
+  $compInput.selectionStart = $compInput.selectionEnd = newPos;
+  $compInput.focus();
+  closeMention();
+
+  // Add agent chip to the chip bar
+  addChip('agent', name);
+
+  // If /direct command active and no target yet, set the target
+  if (composerCommand && composerCommand.cmd === '/direct' && !composerCommand.target) {
+    composerCommand.target = name;
+    $compInput.placeholder = 'Type the prompt message...';
+  }
+}
+
+function closeMention() {
+  mentionActive = false;
+  mentionStart = -1;
+  if ($mentionPopup.querySelector('.mention-item')) {
+    $mentionPopup.classList.remove('visible');
+  }
+}
+
+// Close mention/command/project popup on blur (with delay for click)
+$compInput.addEventListener('blur', () => {
+  setTimeout(() => {
+    closeMention();
+    hideCommandPopup();
+    hideProjectPopup();
+  }, 150);
+});
+
+// ── Modals ──
+function openModal(id) {
+  document.getElementById(id).classList.add('visible');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('visible');
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) closeModal(overlay.id);
+  });
+});
+
+// Close modal on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.visible').forEach(m => closeModal(m.id));
+  }
+});
+
+// ── Agent Edit ──
+let editingAgent = null;
+
+function openAgentEdit(name) {
+  const agent = agents.find(a => a.name === name);
+  if (!agent) return;
+  editingAgent = name;
+
+  document.getElementById('edit-agent-name').value = name;
+  document.getElementById('edit-cli-type').value = agent.cli_type || '';
+  document.getElementById('edit-working-dir').value = agent.working_dir || '';
+  document.getElementById('edit-session-id').value = agent.session_id || '';
+
+  openModal('modal-agent-edit');
+}
+
+async function saveAgentConfig() {
+  if (!editingAgent) return;
+  const btn = document.getElementById('edit-save-btn');
+  const cliType = document.getElementById('edit-cli-type').value;
+  const workingDir = document.getElementById('edit-working-dir').value.trim();
+  const sessionId = document.getElementById('edit-session-id').value.trim();
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const r = await fetch(`/api/agents/${encodeURIComponent(editingAgent)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cli_type: cliType || null,
+        working_dir: workingDir || null,
+        session_id: sessionId || null,
+      }),
+    });
+
+    if (r.ok) {
+      closeModal('modal-agent-edit');
+      await loadAgents();
+    } else {
+      const err = await r.json();
+      alert('Error: ' + (err.error || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('Network error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
+}
+
+async function rescanSession() {
+  if (!editingAgent) return;
+  const btn = document.getElementById('edit-rescan-btn');
+  const cliType = document.getElementById('edit-cli-type').value;
+  const workingDir = document.getElementById('edit-working-dir').value.trim();
+
+  if (!cliType || !workingDir) {
+    alert('Both CLI Type and Working Directory are needed to rescan.');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Scanning...';
+
+  try {
+    const r = await fetch(`/api/agents/${encodeURIComponent(editingAgent)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cli_type: cliType,
+        working_dir: workingDir,
+        session_id: null,
+        rescan: true,
+      }),
+    });
+
+    if (r.ok) {
+      const data = await r.json();
+      const newSid = data.agent?.session_id || '';
+      document.getElementById('edit-session-id').value = newSid;
+      if (newSid) {
+        btn.textContent = 'Found!';
+      } else {
+        btn.textContent = 'No match';
+      }
+      await loadAgents();
+      setTimeout(() => { btn.textContent = 'Rescan'; }, 2000);
+    } else {
+      const err = await r.json();
+      alert('Error: ' + (err.error || 'Unknown error'));
+      btn.textContent = 'Rescan';
+    }
+  } catch (e) {
+    alert('Network error: ' + e.message);
+    btn.textContent = 'Rescan';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Direct Invoke ──
+let directAgent = null;
+
+function openDirect(name) {
+  const agent = agents.find(a => a.name === name);
+  if (!agent) return;
+  directAgent = name;
+
+  const c = color(name);
+  document.getElementById('direct-title').innerHTML =
+    `Direct <span style="color:${c};font-weight:700">${esc(name)}</span>`;
+
+  // Build info line
+  const parts = [];
+  if (agent.cli_type) parts.push(agent.cli_type);
+  if (agent.session_id) parts.push('session: ' + agent.session_id.slice(0, 16) + '...');
+  else if (agent.working_dir) parts.push('--continue mode');
+  if (agent.working_dir) parts.push(agent.working_dir);
+
+  // Smart pull status
+  const canSubprocess = agent.cli_type && (agent.session_id || agent.working_dir);
+  if (canSubprocess) {
+    parts.push('subprocess: yes');
+  } else {
+    parts.push('smart pull only (no CLI config)');
+  }
+  document.getElementById('direct-info').textContent = parts.join(' | ');
+
+  // Set default mode based on agent capabilities
+  const modeSelect = document.getElementById('direct-mode');
+  if (!canSubprocess) {
+    modeSelect.value = 'smart_pull';
+  } else {
+    modeSelect.value = 'auto';
+  }
+
+  document.getElementById('direct-prompt').value = '';
+  document.getElementById('direct-response-container').innerHTML = '';
+  document.getElementById('direct-send-btn').disabled = false;
+  document.getElementById('direct-send-btn').textContent = 'Send';
+
+  openModal('modal-direct');
+  setTimeout(() => document.getElementById('direct-prompt').focus(), 100);
+}
+
+async function sendDirect() {
+  if (!directAgent) return;
+  const prompt = document.getElementById('direct-prompt').value.trim();
+  if (!prompt) return;
+
+  const mode = document.getElementById('direct-mode').value;
+  const btn = document.getElementById('direct-send-btn');
+  const container = document.getElementById('direct-response-container');
+
+  btn.disabled = true;
+  const modeLabel = mode === 'smart_pull' ? 'Waiting for in-band pickup...' :
+                    mode === 'subprocess' ? 'Running subprocess...' :
+                    'Trying smart pull, then subprocess fallback...';
+  btn.textContent = mode === 'subprocess' ? 'Running...' : 'Waiting...';
+
+  container.innerHTML = `
+    <div class="direct-response">
+      <div class="direct-response-header">
+        <span>Response</span>
+        <span class="direct-response-status running">${esc(mode.toUpperCase())}</span>
+      </div>
+      <div class="direct-response-body">
+        <div class="dots" style="padding:8px 0"><span></span><span></span><span></span></div>
+        ${esc(modeLabel)}
+      </div>
+    </div>
+  `;
+
+  try {
+    const r = await fetch('/api/direct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_name: directAgent,
+        prompt,
+        post_to_chat: true,
+        timeout: 120,
+        mode,
+      }),
+    });
+
+    const data = await r.json();
+
+    if (r.ok && data.ok) {
+      const modeTag = data.mode === 'smart_pull' ? 'SMART PULL' : 'SUBPROCESS';
+      const headerInfo = data.exit_code != null ? `Response (exit ${data.exit_code})` : 'Response';
+      container.innerHTML = `
+        <div class="direct-response">
+          <div class="direct-response-header">
+            <span>${headerInfo} <span style="opacity:0.5;font-size:0.7rem">[${modeTag}]</span></span>
+            <span class="direct-response-status success">OK</span>
+          </div>
+          <div class="direct-response-body">${esc(data.output || '(no output)')}</div>
+        </div>
+      `;
+      loadMessages();
+    } else {
+      const errMsg = data.error || data.output || 'Unknown error';
+      container.innerHTML = `
+        <div class="direct-response">
+          <div class="direct-response-header">
+            <span>Response${data.exit_code != null ? ' (exit ' + data.exit_code + ')' : ''}</span>
+            <span class="direct-response-status error">ERROR</span>
+          </div>
+          <div class="direct-response-body">${esc(errMsg)}${data.output ? '\n\n--- stdout ---\n' + esc(data.output) : ''}${data.error && data.output ? '\n\n--- stderr ---\n' + esc(data.error) : ''}</div>
+        </div>
+      `;
+    }
+  } catch (e) {
+    container.innerHTML = `
+      <div class="direct-response">
+        <div class="direct-response-header">
+          <span>Response</span>
+          <span class="direct-response-status error">NETWORK ERROR</span>
+        </div>
+        <div class="direct-response-body">${esc(e.message)}</div>
+      </div>
+    `;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send';
+  }
+}
+
+// Ctrl+Enter to send in direct modal
+document.getElementById('direct-prompt').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    sendDirect();
+  }
+});
+
+// ── Config Toggle ──
+const $agentDirectCb = document.getElementById('agent-direct-cb');
+
+async function loadConfig() {
+  try {
+    const r = await fetch('/api/config');
+    if (r.ok) {
+      const data = await r.json();
+      $agentDirectCb.checked = data.allow_agent_direct;
+    }
+  } catch (e) { /* ignore */ }
+}
+
+$agentDirectCb.addEventListener('change', async () => {
+  try {
+    await fetch('/api/config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allow_agent_direct: $agentDirectCb.checked }),
+    });
+  } catch (e) { /* ignore */ }
+});
+
+// ── Init ──
+Promise.all([loadAgents(), loadMessages(), loadFeatureRequests(), loadConfig()]).then(() => {
+  scrollDown();
+  fillFrProjectFilter();
+  fillComposerProjects();
+});
+setInterval(() => {
+  loadAgents();
+  loadMessages();
+  if (activeTab === 'features') loadFeatureRequests();
+}, 5000);
+</script>
+</body>
+</html>
