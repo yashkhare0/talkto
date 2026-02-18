@@ -85,12 +85,39 @@ export function MessageFeed() {
     [activeChannelId, deleteMessage],
   );
 
-  // Auto-scroll to bottom on new messages or streaming updates
+  // Track whether user is near the bottom of the scroll area.
+  // Only auto-scroll if they haven't scrolled up to read history.
+  const isNearBottom = useRef(true);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = useCallback(() => {
+    const viewport = scrollAreaRef.current?.querySelector(
+      '[data-slot="scroll-area-viewport"]',
+    ) as HTMLElement | null;
+    if (!viewport) return;
+    const { scrollTop, scrollHeight, clientHeight } = viewport;
+    // "Near bottom" = within 150px of the bottom edge
+    isNearBottom.current = scrollHeight - scrollTop - clientHeight < 150;
+  }, []);
+
+  // Attach scroll listener to the radix viewport
+  useEffect(() => {
+    const viewport = scrollAreaRef.current?.querySelector(
+      '[data-slot="scroll-area-viewport"]',
+    ) as HTMLElement | null;
+    if (!viewport) return;
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
+
+  // Auto-scroll to bottom on new messages or streaming updates — only if near bottom
   const streamingText = streamingAgents.map(
     (name) => channelStreams?.get(name) ?? ""
   ).join("");
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isNearBottom.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages.length, streamingText.length, currentTyping.length]);
 
   if (!activeChannelId) {
@@ -107,7 +134,7 @@ export function MessageFeed() {
   return (
     <div className="flex h-full flex-col">
       {/* Messages area */}
-      <ScrollArea className="flex-1 overflow-hidden">
+      <ScrollArea ref={scrollAreaRef} className="flex-1 overflow-hidden">
         <div className="px-4 py-4 space-y-0.5">
           {isLoading && <MessageSkeleton />}
 

@@ -32,6 +32,28 @@ import {
 } from "../services/message-router";
 
 // ---------------------------------------------------------------------------
+// Auto-discovery: find the OpenCode API server for session liveness checks
+// ---------------------------------------------------------------------------
+
+const OPENCODE_DEFAULT_PORT = 19877;
+
+/** Try to discover the OpenCode API server URL by probing the default port. */
+async function discoverServerUrl(sessionId: string): Promise<string | null> {
+  const candidate = `http://127.0.0.1:${OPENCODE_DEFAULT_PORT}`;
+  try {
+    const resp = await fetch(`${candidate}/session/${sessionId}`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (resp.ok) {
+      return candidate;
+    }
+  } catch {
+    // Not reachable
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Session store: maps MCP session_id -> agent_name
 // ---------------------------------------------------------------------------
 
@@ -103,11 +125,17 @@ server.tool(
       };
     }
 
+    // Auto-discover OpenCode server URL if not provided
+    let resolvedServerUrl = args.server_url ?? null;
+    if (!resolvedServerUrl) {
+      resolvedServerUrl = await discoverServerUrl(args.session_id.trim());
+    }
+
     const result = registerOrConnectAgent({
       sessionId: args.session_id.trim(),
       projectPath: args.project_path,
       agentName: args.agent_name,
-      serverUrl: args.server_url,
+      serverUrl: resolvedServerUrl,
     });
 
     const agentName = result.agent_name as string | undefined;
