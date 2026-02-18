@@ -88,6 +88,26 @@ app.all("/mcp", async (c) => {
     }
   }
 
+  // Stale session ID — client is sending a session ID from before a server
+  // restart. The MCP SDK transport will reject this with 404 "Session not found"
+  // if we pass the raw request through, because the new transport's session ID
+  // won't match. Strip the stale header so the SDK treats it as a fresh init.
+  let request = c.req.raw;
+  if (sessionId) {
+    console.log(
+      `[MCP] Stale session ID detected: ${sessionId} — stripping header for fresh init`
+    );
+    const headers = new Headers(request.headers);
+    headers.delete("mcp-session-id");
+    request = new Request(request.url, {
+      method: request.method,
+      headers,
+      body: request.body,
+      // @ts-expect-error — Bun supports duplex on Request
+      duplex: "half",
+    });
+  }
+
   // New session — create transport + new MCP server instance, connect, handle
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: () => crypto.randomUUID(),
@@ -113,7 +133,7 @@ app.all("/mcp", async (c) => {
   await server.connect(transport);
 
   try {
-    return await transport.handleRequest(c.req.raw);
+    return await transport.handleRequest(request);
   } catch (err) {
     console.error("[MCP] Request handling error:", err);
     return c.json({ error: "MCP request failed" }, 500);
