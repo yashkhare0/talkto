@@ -12,8 +12,8 @@ import type { Session, Part, TextPart, AssistantMessage } from "@opencode-ai/sdk
 // Re-export useful types for consumers
 export type { Session, Part, TextPart, AssistantMessage };
 
-// Default timeout for session.prompt() calls (2 minutes)
-const PROMPT_TIMEOUT_MS = 120_000;
+// Default timeout for session.prompt() calls (3 minutes)
+const PROMPT_TIMEOUT_MS = 180_000;
 
 // ---------------------------------------------------------------------------
 // Client cache — one client per server URL
@@ -22,10 +22,6 @@ const PROMPT_TIMEOUT_MS = 120_000;
 type OpencodeClient = ReturnType<typeof createOpencodeClient>;
 
 const clients = new Map<string, OpencodeClient>();
-
-// Invocation session cache: agentName → sessionId
-// Dedicated sessions created for TalkTo invocations, separate from agent TUI sessions
-const invocationSessions = new Map<string, string>();
 
 /**
  * Get or create an OpenCode SDK client for a given server URL.
@@ -52,6 +48,8 @@ export function removeClient(serverUrl: string): void {
 
 /**
  * List all sessions on an OpenCode server.
+ * NOTE: This is project-scoped — only returns sessions for the server's
+ * current project context. Use getSession() for cross-project lookups.
  * Returns an empty array if the server is unreachable.
  */
 export async function listSessions(serverUrl: string): Promise<Session[]> {
@@ -67,6 +65,8 @@ export async function listSessions(serverUrl: string): Promise<Session[]> {
 
 /**
  * Get a specific session by ID.
+ * Works cross-project — returns the session regardless of which project it
+ * belongs to (unlike session.list which is project-scoped).
  * Returns null if the session doesn't exist or the server is unreachable.
  */
 export async function getSession(
@@ -84,14 +84,15 @@ export async function getSession(
 
 /**
  * Check if a session is alive on an OpenCode server.
- * Queries session.list() and checks if the session ID appears.
+ * Uses session.get() (direct lookup) instead of session.list() because
+ * session.list() is project-scoped and won't see cross-project sessions.
  */
 export async function isSessionAlive(
   serverUrl: string,
   sessionId: string
 ): Promise<boolean> {
-  const sessions = await listSessions(serverUrl);
-  return sessions.some((s) => s.id === sessionId);
+  const session = await getSession(serverUrl, sessionId);
+  return session !== null;
 }
 
 /**
@@ -109,118 +110,17 @@ export async function isServerHealthy(serverUrl: string): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
-// Session creation — dedicated sessions for TalkTo invocations
-// ---------------------------------------------------------------------------
-
-/**
- * Create a new OpenCode session.
- *
- * Used to create dedicated invocation sessions so we don't conflict
- * with an agent's active TUI session (which would hang on prompt()).
- */
-export async function createSession(
-  serverUrl: string,
-  directory?: string
-): Promise<Session | null> {
-  try {
-    const client = getClient(serverUrl);
-    const result = await (client.session as any).create({
-      body: directory ? { path: directory } : {},
-    });
-    return (result.data ?? null) as Session | null;
-  } catch (err) {
-    console.error(`[OPENCODE] Failed to create session at ${serverUrl}:`, err);
-    return null;
-  }
-}
-
-/**
- * Get or create a dedicated invocation session for an agent.
- *
- * Each agent gets its own invocation session (separate from their TUI session)
- * so that session.prompt() doesn't hang on a busy session. The session is
- * cached per agent name and reused across invocations, maintaining
- * conversation history.
- *
- * When a new session is created and `systemContext` is provided, it's injected
- * via `noReply: true` so the agent absorbs identity/project context before
- * receiving the first real prompt.
- *
- * If the cached session is dead, a new one is created.
- */
-export async function getOrCreateInvocationSession(
-  serverUrl: string,
-  agentName: string,
-  projectDirectory: string,
-  systemContext?: string
-): Promise<string | null> {
-  // Check cache
-  const cached = invocationSessions.get(agentName);
-  if (cached) {
-    // Verify it's still alive
-    const alive = await isSessionAlive(serverUrl, cached);
-    if (alive) {
-      return cached;
-    }
-    console.log(
-      `[OPENCODE] Cached invocation session for '${agentName}' is dead — creating new one`
-    );
-    invocationSessions.delete(agentName);
-  }
-
-  // Create a new dedicated session
-  console.log(`[OPENCODE] Creating dedicated invocation session for '${agentName}'`);
-  const session = await createSession(serverUrl, projectDirectory);
-  if (!session) {
-    console.error(`[OPENCODE] Failed to create invocation session for '${agentName}'`);
-    return null;
-  }
-
-  invocationSessions.set(agentName, session.id);
-  console.log(
-    `[OPENCODE] Created invocation session for '${agentName}': ${session.id} (${(session as any).slug ?? ""})`
-  );
-
-  // Inject system context so the agent knows who it is and what TalkTo is
-  if (systemContext) {
-    try {
-      const client = getClient(serverUrl);
-      await client.session.prompt({
-        path: { id: session.id },
-        body: {
-          parts: [{ type: "text", text: systemContext }],
-          noReply: true,
-        },
-      });
-      console.log(`[OPENCODE] Injected system context for '${agentName}' (${systemContext.length} chars)`);
-    } catch (err) {
-      console.error(`[OPENCODE] Failed to inject system context for '${agentName}':`, err);
-      // Non-fatal — session still usable, just without context
-    }
-  }
-
-  return session.id;
-}
-
-/** Clear a cached invocation session (e.g., when agent unregisters). */
-export function clearInvocationSession(agentName: string): void {
-  invocationSessions.delete(agentName);
-}
-
-// ---------------------------------------------------------------------------
-// Invocation — send a prompt and get the response
+// Invocation — send a prompt to an agent's registered session
 // ---------------------------------------------------------------------------
 
 /**
  * Send a prompt to an OpenCode session and wait for the response.
  *
- * Uses `session.prompt()` which blocks until the AI finishes processing.
- * Returns the extracted text content from the response parts, or null on error.
+ * Uses session.prompt() which blocks until the AI finishes processing.
+ * The session ID should be the agent's registered session — their own
+ * running OpenCode instance. This works cross-project.
  *
- * Includes a timeout (default 2 minutes) to prevent hanging on busy sessions.
- *
- * For DMs: call with just the message text.
- * For @mentions: call with a formatted prompt including channel context.
+ * Includes a timeout (default 3 minutes) as a safety net.
  */
 export async function promptSession(
   serverUrl: string,

@@ -2,7 +2,7 @@
 # Run `make` or `make help` to see available commands.
 
 SHELL := /bin/bash
-export PATH := $(HOME)/.local/bin:$(PATH)
+export PATH := $(HOME)/.bun/bin:$(HOME)/.local/bin:$(PATH)
 
 .PHONY: help install dev start stop status kill test lint build clean mcp-config
 
@@ -12,23 +12,27 @@ help: ## Show this help
 
 # ── Setup ────────────────────────────────────────────
 
-install: ## First-time setup: Python venv + deps + frontend deps
-	uv venv
-	uv pip install -e ".[dev]"
+install: ## First-time setup: server deps + frontend deps
+	cd server && bun install
 	cd frontend && pnpm install
 
 # ── Run ──────────────────────────────────────────────
 
-dev: ## Start both servers with hot reload (main command)
-	uv run talkto start
+dev: ## Start backend + frontend with hot reload
+	@echo "Starting TS backend on :8000 and frontend on :3000..."
+	@cd server && nohup bun run src/index.ts > /tmp/talkto-server.log 2>&1 &
+	@cd frontend && nohup pnpm dev > /tmp/talkto-frontend.log 2>&1 &
+	@sleep 2
+	@echo "Backend:  http://localhost:8000"
+	@echo "Frontend: http://localhost:3000"
+	@echo "Logs:     /tmp/talkto-server.log, /tmp/talkto-frontend.log"
 
 start: dev ## Alias for dev
 
-api: ## Start only the API server (no frontend)
-	uv run talkto start --api-only
+api: ## Start only the TS backend (no frontend)
+	cd server && bun run src/index.ts
 
-stop: ## Stop running servers
-	uv run talkto stop
+stop: kill ## Stop running servers
 
 kill: ## Force-kill anything on ports 8000 and 3000
 	@lsof -ti :8000 2>/dev/null | xargs kill -9 2>/dev/null || true
@@ -36,17 +40,18 @@ kill: ## Force-kill anything on ports 8000 and 3000
 	@echo "Killed processes on :8000 and :3000"
 
 status: ## Check if servers are running
-	uv run talkto status
+	@echo "Backend  (:8000):" && (lsof -i :8000 -P -n 2>/dev/null | grep LISTEN || echo "  not running")
+	@echo "Frontend (:3000):" && (lsof -i :3000 -P -n 2>/dev/null | grep LISTEN || echo "  not running")
 
 # ── Testing ──────────────────────────────────────────
 
-test: ## Run all tests (pytest + vitest + tsc)
-	uv run pytest tests/ -v
+test: ## Run all tests (bun test + vitest + tsc)
+	cd server && bun test
 	cd frontend && pnpm test
 	cd frontend && npx tsc -b --noEmit
 
-test-py: ## Run Python tests only
-	uv run pytest tests/ -v
+test-server: ## Run server tests only (bun:test)
+	cd server && bun test
 
 test-fe: ## Run frontend tests only (vitest)
 	cd frontend && pnpm test
@@ -56,12 +61,8 @@ test-ts: ## Run TypeScript type check only
 
 # ── Linting ──────────────────────────────────────────
 
-lint: ## Lint everything (ruff + tsc)
-	uv run ruff check backend/ cli/ migrations/
+lint: ## Lint everything (tsc)
 	cd frontend && npx tsc -b --noEmit
-
-lint-fix: ## Auto-fix Python lint issues
-	uv run ruff check --fix backend/ cli/ migrations/
 
 # ── Build ────────────────────────────────────────────
 
@@ -70,20 +71,11 @@ build: ## Production build of the frontend
 
 # ── Utilities ────────────────────────────────────────
 
-mcp-config: ## Generate MCP config (usage: make mcp-config PROJECT=/path/to/project)
-	@if [ -z "$(PROJECT)" ]; then \
-		echo "Usage: make mcp-config PROJECT=/path/to/your/project"; \
-		exit 1; \
-	fi
-	uv run talkto mcp-config "$(PROJECT)"
-
 clean: ## Remove database, build artifacts, caches
 	rm -f data/talkto.db data/talkto.db-wal data/talkto.db-shm
 	rm -rf frontend/dist
-	rm -rf .pytest_cache .ruff_cache
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@echo "Cleaned."
 
-nuke: clean ## Full clean: also remove venv and node_modules
-	rm -rf .venv frontend/node_modules
+nuke: clean ## Full clean: also remove node_modules
+	rm -rf server/node_modules frontend/node_modules
 	@echo "Nuked. Run 'make install' to set up again."

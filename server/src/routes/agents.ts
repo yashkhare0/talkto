@@ -26,38 +26,33 @@ function isPidAlive(pid: number): boolean {
   }
 }
 
-async function fetchOpencodeSessions(serverUrl: string): Promise<Set<string>> {
+/**
+ * Check if an agent's session is alive via direct GET /session/{id}.
+ * Uses session.get() which works cross-project (unlike session.list()
+ * which is project-scoped and misses sessions from other projects).
+ */
+async function isSessionAliveViaGet(
+  serverUrl: string,
+  sessionId: string
+): Promise<boolean> {
   try {
-    const resp = await fetch(`${serverUrl}/session`, {
+    const resp = await fetch(`${serverUrl}/session/${sessionId}`, {
       signal: AbortSignal.timeout(5000),
     });
-    if (resp.ok) {
-      const data = (await resp.json()) as Array<{ id?: string }>;
-      return new Set(data.map((s) => s.id ?? ""));
-    }
+    return resp.ok;
   } catch {
-    // Server unreachable
+    return false;
   }
-  return new Set();
 }
 
-function computeGhost(
-  agent: typeof agents.$inferSelect,
-  opencodeSessions: Map<string, Set<string>>
-): boolean | Promise<boolean> {
+async function computeGhost(
+  agent: typeof agents.$inferSelect
+): Promise<boolean> {
   if (agent.agentType === "system") return false;
 
   if (agent.serverUrl && agent.providerSessionId) {
-    // Check if we need to fetch sessions for this server
-    if (!opencodeSessions.has(agent.serverUrl)) {
-      // Return a promise — caller must await
-      return (async () => {
-        const sessions = await fetchOpencodeSessions(agent.serverUrl!);
-        opencodeSessions.set(agent.serverUrl!, sessions);
-        return !sessions.has(agent.providerSessionId!);
-      })();
-    }
-    return !opencodeSessions.get(agent.serverUrl)!.has(agent.providerSessionId);
+    // Direct session lookup — works cross-project
+    return !(await isSessionAliveViaGet(agent.serverUrl, agent.providerSessionId));
   }
 
   // No invocation credentials — check for active session with live PID
@@ -78,13 +73,20 @@ async function refreshGhostCache(): Promise<void> {
   try {
     const db = getDb();
     const allAgents = db.select().from(agents).all();
-    const opencodeSessions = new Map<string, Set<string>>();
     const newCache = new Map<string, boolean>();
 
-    for (const agent of allAgents) {
-      const result = computeGhost(agent, opencodeSessions);
-      const isGhost = result instanceof Promise ? await result : result;
-      newCache.set(agent.id, isGhost);
+    // Check all agents in parallel
+    const results = await Promise.allSettled(
+      allAgents.map(async (agent) => ({
+        id: agent.id,
+        isGhost: await computeGhost(agent),
+      }))
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        newCache.set(result.value.id, result.value.isGhost);
+      }
     }
 
     ghostCache.clear();
