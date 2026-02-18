@@ -1,60 +1,16 @@
 /**
- * Agent discovery — find OpenCode servers and resolve invocation info.
+ * Agent discovery — verify agent liveness and resolve invocation info.
  *
- * Simplified from the Python backend's 4-strategy approach:
- * - Uses OpenCode SDK's session.list() instead of ps/process-tree walking
- * - Keeps lsof for server port discovery (SDK needs a baseUrl)
- * - session_id is required at registration, so discovery is mostly
- *   about verifying liveness and recovering from stale credentials
+ * No auto-discovery: if an agent's session is dead, it becomes a ghost
+ * and must re-register with a valid session_id. Auto-discovery was removed
+ * because all OpenCode sessions share the same directory path, making
+ * project-based session matching meaningless and causing identity theft.
  */
 
-import { execSync } from "node:child_process";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { agents } from "../db/schema";
-import {
-  isSessionAlive,
-  isServerHealthy,
-  discoverSession,
-  listSessions,
-  removeClient,
-} from "../sdk/opencode";
-
-// ---------------------------------------------------------------------------
-// Server discovery — find running OpenCode servers via lsof
-// ---------------------------------------------------------------------------
-
-/**
- * Find a running OpenCode serve process and return its URL.
- *
- * Scans `lsof -i -P -n` for opencode processes listening on 127.0.0.1.
- * Only needed when an agent didn't provide server_url at registration.
- */
-export function discoverOpenCodeServer(): string | null {
-  try {
-    const output = execSync("lsof -i -P -n", {
-      timeout: 5000,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-
-    // Match: opencode  20636  user  10u  IPv4 ...  TCP 127.0.0.1:19877 (LISTEN)
-    const pattern = /opencode.*TCP\s+127\.0\.0\.1:(\d+)\s+\(LISTEN\)/;
-    for (const line of output.split("\n")) {
-      const match = pattern.exec(line);
-      if (match) {
-        const url = `http://127.0.0.1:${match[1]}`;
-        console.log(`[DISCOVERY] Found OpenCode server at ${url}`);
-        return url;
-      }
-    }
-  } catch {
-    // lsof not available or timed out
-  }
-
-  console.log("[DISCOVERY] No running OpenCode server found");
-  return null;
-}
+import { isSessionAlive } from "../sdk/opencode";
 
 // ---------------------------------------------------------------------------
 // Invocation info resolution
@@ -72,8 +28,7 @@ export interface InvocationInfo {
  * Flow:
  * 1. Read server_url + provider_session_id from DB
  * 2. If both exist, verify session is alive via SDK
- * 3. If stale (session dead), clear credentials and attempt discovery
- * 4. If missing, attempt discovery (lsof for server, session.list() for session)
+ * 3. If stale (session dead), clear credentials — agent becomes a ghost
  *
  * Returns invocation info or null if agent is not invocable.
  */
@@ -120,70 +75,16 @@ export async function getAgentInvocationInfo(
     sessionId = null;
   }
 
-  // Attempt auto-discovery
+  // No auto-discovery. If an agent's session is dead, it becomes a ghost.
+  // The agent must re-register with a valid session_id to come back.
+  //
+  // Auto-discovery was removed because ALL OpenCode sessions share the same
+  // directory path, making project-based session matching meaningless.
+  // This caused agents to get reassigned to wrong sessions (identity theft).
   console.log(
-    `[DISCOVERY] Attempting auto-discovery for '${agentName}'...`
+    `[DISCOVERY] '${agentName}' has no valid session — agent is a ghost. Must re-register.`
   );
-
-  // Step 1: Find server URL
-  if (!serverUrl) {
-    serverUrl = discoverOpenCodeServer();
-    if (!serverUrl) {
-      console.log(
-        `[DISCOVERY] No OpenCode server found for '${agentName}'`
-      );
-      return null;
-    }
-  }
-
-  // Step 2: Verify server is healthy
-  const healthy = await isServerHealthy(serverUrl);
-  if (!healthy) {
-    console.log(`[DISCOVERY] Server ${serverUrl} is not healthy`);
-    removeClient(serverUrl);
-    return null;
-  }
-
-  // Step 3: Find matching session by project path
-  // Collect sessions already claimed by other agents to exclude them
-  const allAgents = db.select().from(agents).all();
-  const excludeSessionIds = new Set<string>();
-  for (const a of allAgents) {
-    if (
-      a.agentName !== agentName &&
-      a.providerSessionId &&
-      a.providerSessionId.trim()
-    ) {
-      excludeSessionIds.add(a.providerSessionId);
-    }
-  }
-
-  const session = await discoverSession(
-    serverUrl,
-    agent.projectPath,
-    excludeSessionIds
-  );
-
-  if (!session) {
-    console.log(
-      `[DISCOVERY] No matching session found for '${agentName}' (project: ${agent.projectPath})`
-    );
-    return null;
-  }
-
-  sessionId = session.id;
-
-  // Persist discovered credentials
-  db.update(agents)
-    .set({ serverUrl, providerSessionId: sessionId })
-    .where(eq(agents.id, agent.id))
-    .run();
-
-  console.log(
-    `[DISCOVERY] Auto-discovered for '${agentName}': server=${serverUrl} session=${sessionId} (persisted)`
-  );
-
-  return { serverUrl, sessionId, projectPath: agent.projectPath };
+  return null;
 }
 
 /**
