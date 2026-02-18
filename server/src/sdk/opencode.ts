@@ -7,6 +7,7 @@
  */
 
 import { createOpencodeClient } from "@opencode-ai/sdk/client";
+import { createOpencodeClient as createV2Client } from "@opencode-ai/sdk/v2/client";
 import type {
   Session,
   Part,
@@ -44,11 +45,13 @@ const PROMPT_TIMEOUT_MS = 600_000;
 // ---------------------------------------------------------------------------
 
 type OpencodeClient = ReturnType<typeof createOpencodeClient>;
+type OpencodeV2Client = ReturnType<typeof createV2Client>;
 
 const clients = new Map<string, OpencodeClient>();
+const v2Clients = new Map<string, OpencodeV2Client>();
 
 /**
- * Get or create an OpenCode SDK client for a given server URL.
+ * Get or create an OpenCode SDK client (v1) for a given server URL.
  * Clients are cached per URL to avoid creating new connections per call.
  */
 export function getClient(serverUrl: string): OpencodeClient {
@@ -61,9 +64,26 @@ export function getClient(serverUrl: string): OpencodeClient {
   return client;
 }
 
-/** Remove a cached client (e.g., when server becomes unreachable). */
+/**
+ * Get or create an OpenCode SDK v2 client for TUI operations.
+ * The v2 API adds tui.selectSession() for session-scoped TUI control.
+ * Cached per URL like the v1 client.
+ */
+export function getV2Client(serverUrl: string): OpencodeV2Client {
+  const normalized = serverUrl.replace(/\/$/, "");
+  let client = v2Clients.get(normalized);
+  if (!client) {
+    client = createV2Client({ baseUrl: normalized });
+    v2Clients.set(normalized, client);
+  }
+  return client;
+}
+
+/** Remove cached clients (e.g., when server becomes unreachable). */
 export function removeClient(serverUrl: string): void {
-  clients.delete(serverUrl.replace(/\/$/, ""));
+  const normalized = serverUrl.replace(/\/$/, "");
+  clients.delete(normalized);
+  v2Clients.delete(normalized);
 }
 
 // ---------------------------------------------------------------------------
@@ -486,23 +506,62 @@ export async function isTuiActive(
 }
 
 /**
+ * Navigate the TUI to a specific session.
+ *
+ * Uses the v2 SDK's `tui.selectSession()` endpoint to switch the TUI's
+ * active view to the target session. This ensures subsequent TUI operations
+ * (appendPrompt, submitPrompt) go to the correct agent's session.
+ *
+ * Must be called BEFORE sending prompts via TUI when the target session
+ * might not be the currently-viewed session in the terminal.
+ */
+export async function tuiSelectSession(
+  serverUrl: string,
+  sessionId: string,
+  directory?: string
+): Promise<boolean> {
+  try {
+    const client = getV2Client(serverUrl);
+    const result = await client.tui.selectSession({
+      sessionID: sessionId,
+      directory,
+    });
+    return result.data === true;
+  } catch (err) {
+    console.error(`[OPENCODE] TUI selectSession failed for ${sessionId}:`, err);
+    return false;
+  }
+}
+
+/**
  * Append text to the TUI prompt and submit it.
  * Used for active TUI sessions where we want the agent to see the
  * message naturally in their terminal.
  *
  * The `directory` parameter scopes the operation to the TUI connected
- * for that project, preventing cross-agent interference on shared servers.
+ * for that project. The `sessionId` parameter ensures the TUI navigates
+ * to the correct session before sending the prompt (via selectSession).
  *
- * Returns true if both operations succeeded.
+ * Returns true if all operations succeeded.
  */
 export async function tuiPrompt(
   serverUrl: string,
   text: string,
-  directory?: string
+  directory?: string,
+  sessionId?: string
 ): Promise<boolean> {
   try {
     const client = getClient(serverUrl);
     const dirQuery = directory ? { directory } : undefined;
+
+    // Navigate to the target session first (v2 API)
+    if (sessionId) {
+      const selected = await tuiSelectSession(serverUrl, sessionId, directory);
+      if (!selected) {
+        console.warn(`[OPENCODE] Failed to select session ${sessionId} in TUI — proceeding anyway`);
+      }
+    }
+
     // Clear any existing text first to prevent concatenation
     await client.tui.clearPrompt({ query: dirQuery });
     const appendResult = await client.tui.appendPrompt({
@@ -559,10 +618,11 @@ export async function tuiToast(
  * This function:
  * 1. Subscribes to SSE events BEFORE sending the TUI prompt (so no deltas
  *    are missed)
- * 2. Sends the prompt via tuiPrompt() (clear → append → submit)
- * 3. Accumulates text deltas from message.part.updated events
- * 4. Resolves when session.idle fires, returning accumulated text
- * 5. Falls back to session.prompt() if tuiPrompt() fails (TUI disconnected)
+ * 2. Navigates the TUI to the target session via selectSession() (v2 API)
+ * 3. Sends the prompt via tuiPrompt() (clear → append → submit)
+ * 4. Accumulates text deltas from message.part.updated events
+ * 5. Resolves when session.idle fires, returning accumulated text
+ * 6. Falls back to session.prompt() if tuiPrompt() fails (TUI disconnected)
  *
  * Accepts the same callback shape as promptSessionWithEvents() for
  * real-time typing indicators and streaming text to the frontend.
@@ -663,9 +723,9 @@ export async function promptViaTui(
       }
     })();
 
-    // Send the prompt via TUI (scoped to agent's project directory)
+    // Send the prompt via TUI (scoped to agent's session + directory)
     console.log(`[OPENCODE] Sending prompt via TUI for session ${sessionId}${directory ? ` (dir: ${directory})` : ""}`);
-    const tuiSuccess = await tuiPrompt(serverUrl, text, directory);
+    const tuiSuccess = await tuiPrompt(serverUrl, text, directory, sessionId);
 
     if (!tuiSuccess) {
       // TUI failed (disconnected?) — clean up and fall back to session.prompt()
