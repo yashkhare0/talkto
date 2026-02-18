@@ -1,5 +1,5 @@
 /** Message feed — displays messages for the active channel. */
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import { useMessages, useMe } from "@/hooks/use-queries";
 import { useAppStore } from "@/stores/app-store";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,6 +9,10 @@ import { MessageInput } from "./message-input";
 import { AlertTriangle, Bot, MessageSquare } from "lucide-react";
 import { formatDateSeparator, shouldShowDateSeparator } from "@/lib/message-utils";
 import type { Message } from "@/lib/types";
+
+const MarkdownRenderer = lazy(
+  () => import("@/components/workspace/markdown-renderer"),
+);
 
 export function MessageFeed() {
   const activeChannelId = useAppStore((s) => s.activeChannelId);
@@ -71,10 +75,13 @@ export function MessageFeed() {
     );
   }, [fetchedMessages, realtimeMessages, activeChannelId]);
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages or streaming updates
+  const streamingText = streamingAgents.map(
+    (name) => channelStreams?.get(name) ?? ""
+  ).join("");
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  }, [messages.length, streamingText.length, currentTyping.length]);
 
   if (!activeChannelId) {
     return (
@@ -128,40 +135,28 @@ export function MessageFeed() {
             );
           })}
 
+          {/* Streaming ghost messages — inline with the message flow */}
+          {streamingAgents.map((agentName) => (
+            <StreamingMessage
+              key={`streaming-${agentName}`}
+              agentName={agentName}
+              text={channelStreams?.get(agentName) ?? ""}
+            />
+          ))}
+
+          {/* Typing indicator for agents that haven't started streaming yet */}
+          {waitingAgents.length > 0 && (
+            <TypingIndicator agents={waitingAgents} />
+          )}
+
+          {/* Invocation error */}
+          {currentError && !currentTyping.length && (
+            <InvocationError message={currentError} />
+          )}
+
           <div ref={bottomRef} />
         </div>
       </ScrollArea>
-
-      {/* Streaming ghost messages — show partial text as agent generates it */}
-      {streamingAgents.map((agentName) => (
-        <StreamingMessage
-          key={`streaming-${agentName}`}
-          agentName={agentName}
-          text={channelStreams?.get(agentName) ?? ""}
-        />
-      ))}
-
-      {/* Typing indicator for agents that haven't started streaming yet */}
-      <div
-        className={`grid transition-all duration-200 ${
-          waitingAgents.length > 0 ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-        }`}
-      >
-        <div className="overflow-hidden">
-          <TypingIndicator agents={waitingAgents} />
-        </div>
-      </div>
-
-      {/* Invocation error */}
-      <div
-        className={`grid transition-all duration-200 ${
-          currentError && !currentTyping.length ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-        }`}
-      >
-        <div className="overflow-hidden">
-          <InvocationError message={currentError ?? ""} />
-        </div>
-      </div>
 
       {/* Input */}
       <MessageInput channelId={activeChannelId} />
@@ -194,34 +189,27 @@ function InvocationError({ message }: { message: string }) {
 
 /** Ghost message shown while an agent is streaming its response in real-time. */
 function StreamingMessage({ agentName, text }: { agentName: string; text: string }) {
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll as new text streams in
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [text]);
-
   return (
-    <div className="px-4 py-1.5" ref={bottomRef}>
-      <div className="flex items-start gap-2">
-        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10">
-          <Bot className="h-3.5 w-3.5 text-primary/60" />
+    <div className="group relative px-2 py-1 rounded-md mt-3 pt-2">
+      {/* Sender line — matches MessageBubble layout */}
+      <div className="mb-1 flex items-center gap-2">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-violet-500/15">
+          <Bot className="h-4 w-4 text-violet-500" />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-foreground/80">{agentName}</span>
-            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/40">
-              streaming
-              <span className="inline-flex gap-0.5">
-                <span className="h-0.5 w-0.5 animate-pulse rounded-full bg-primary/40" />
-              </span>
-            </span>
-          </div>
-          <div className="mt-0.5 text-sm text-foreground/70 whitespace-pre-wrap break-words">
-            {text}
-            <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary/50 align-text-bottom" />
-          </div>
-        </div>
+        <span className="text-sm font-semibold truncate max-w-[200px] text-violet-500">
+          {agentName}
+        </span>
+        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/40">
+          streaming
+          <span className="h-1 w-1 animate-pulse rounded-full bg-violet-500/40" />
+        </span>
+      </div>
+      {/* Streaming content — rendered as markdown for consistency */}
+      <div className="pl-10 text-sm leading-relaxed">
+        <Suspense fallback={<span className="text-foreground/70">{text.slice(0, 200)}</span>}>
+          <MarkdownRenderer content={text} mentions={null} />
+        </Suspense>
+        <span className="inline-block h-3.5 w-0.5 animate-pulse bg-violet-500/50 align-text-bottom" />
       </div>
     </div>
   );
