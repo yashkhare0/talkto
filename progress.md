@@ -79,7 +79,7 @@
 
 ### Phase 4: TUI Integration & Event Subscription
 - **Status:** complete
-- **Committed:** (pending commit)
+- **Committed:** 923e3b1, ebaab42 (TUI removal from invoker: 030adaf)
 - Actions taken:
   - Researched OpenCode SDK internals: discovered `event.subscribe()` returns `AsyncGenerator<Event>`, `session.status()` returns `{sessionID: SessionStatus}` map, 30+ event types with typed payloads
   - Added `getSessionStatuses()`, `getSessionStatus()`, `isSessionBusy()` — wraps `session.status()` for busy/idle detection
@@ -104,11 +104,53 @@
   - SSE events include `message.part.updated` with `delta` field for streaming text
 
 ### Phase 5: Infrastructure & Documentation
-- **Status:** pending
+- **Status:** complete
 - Actions taken:
-  -
+  - Removed entire Python backend: `backend/`, `cli/`, `tests/` (Python), `bin/talkto.mjs`
+  - Removed Python config: `pyproject.toml`, `uv.lock`, `alembic.ini`, `migrations/`, root `package.json`
+  - Updated CI: replaced Python/pytest job with Bun/bun:test job
+  - Rewrote Dockerfile for `oven/bun:1` multi-stage build (Node builds frontend, Bun runs server)
+  - Updated docker-compose.yml healthcheck for Bun
+  - Cleaned `.gitignore` of Python-specific entries
+  - Rewrote `AGENTS.md` for TS-only architecture
+  - Updated `docs/AGENT_USER_GUIDE.md` — removed `connect()`, `agent_type`, clarified auto-reply flow
+  - Updated `README.md` — new quickstart, architecture diagram, tech stack, commands
+  - Updated `prompts/master_prompt.md` — removed Python/FastAPI example references
+  - Updated `prompts/blocks/tools.md` — clarified `send_message` is proactive only, added `create_feature_request`
+  - Updated `prompts/blocks/messaging.md` — documented DM channels, automatic reply flow
+  - Updated `prompts/registration_rules.md` — fixed incorrect `send_message` for replies instructions
+  - Updated MCP tool descriptions in `server/src/mcp/server.ts`
+  - Removed TUI invocation path from `agent-invoker.ts` (TUI SDK kept for future use)
+  - Rewrote `CONTRIBUTING.md` for TS-only architecture
+  - All 48 tests passing (336 assertions) after all changes
 - Files created/modified:
-  -
+  - AGENTS.md (rewritten)
+  - README.md (updated)
+  - CONTRIBUTING.md (rewritten)
+  - docs/AGENT_USER_GUIDE.md (updated)
+  - prompts/master_prompt.md (updated)
+  - prompts/blocks/tools.md (updated)
+  - prompts/blocks/messaging.md (updated)
+  - prompts/registration_rules.md (updated)
+  - server/src/mcp/server.ts (updated descriptions)
+  - server/src/services/agent-invoker.ts (removed TUI path)
+  - Dockerfile (rewritten)
+  - docker-compose.yml (updated)
+  - .github/workflows/ci.yml (updated)
+  - .gitignore (cleaned)
+- Commits:
+  - eca1168 Remove Python backend, CLI, and test suite
+  - b85a69a Remove Python config files, Alembic migrations, and npm wrapper
+  - b129d5d Update CI: replace Python backend job with Bun server tests
+  - 0916f59 Rewrite Dockerfile and docker-compose for Bun runtime
+  - 458ca91 Clean up .gitignore: remove Python-specific entries
+  - 030adaf Update MCP tool descriptions and onboarding prompts for clarity
+  - ebaab42 Remove TUI invocation path from agent-invoker
+  - 3f7dd77 Rewrite AGENTS.md for TS-only architecture
+  - d5c0a69 Update AGENT_USER_GUIDE for TS backend conventions
+  - ed9367d Update master prompt examples to remove Python/FastAPI references
+  - 3cae24c Update README for TS-only architecture
+  - 95a8dea Rewrite CONTRIBUTING.md for TS-only architecture
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
@@ -130,11 +172,11 @@
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 4 complete, Phase 5 next |
-| Where am I going? | Phase 5: Infrastructure & Documentation |
-| What's the goal? | Complete TS backend with OpenCode SDK agent invocation |
-| What have I learned? | session.status() is separate API, SSE stream is AsyncGenerator, TUI detection via clearPrompt heuristic |
-| What have I done? | Phases 0-4 complete. Full invocation pipeline with TUI detection, event-driven typing, session status |
+| Where am I? | All 5 phases complete. Python backend fully removed. TS-only architecture. |
+| Where am I going? | All planned work is done. Ready for new features or bug fixes. |
+| What's the goal? | Complete TS backend with OpenCode SDK agent invocation — ACHIEVED |
+| What have I learned? | session.status() is separate API, SSE stream is AsyncGenerator, TUI detection via clearPrompt heuristic, session.list() is project-scoped |
+| What have I done? | Phases 0-5 complete. Full invocation pipeline, event-driven typing, Python removal, docs rewrite, 48 tests passing |
 
 ---
 *Update after completing each phase or encountering errors*
