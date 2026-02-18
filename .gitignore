@@ -1,14 +1,4 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-.venv/
-.mypy_cache/
-.ruff_cache/
-.pytest_cache/
-
-# Node
+# Node / Bun
 node_modules/
 dist/
 .vite/
@@ -23,10 +13,6 @@ data/
 # Environment
 .env
 .dev.vars
-
-# Coverage
-.coverage
-htmlcov/
 
 # TalkTo agent identity (machine-specific, created by agents)
 .talkto
