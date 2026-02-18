@@ -7,6 +7,7 @@ import { eq, asc } from "drizzle-orm";
 import { getDb } from "../db";
 import { agents, channels, channelMembers, sessions, users } from "../db/schema";
 import type { AgentResponse, ChannelResponse } from "../types";
+import { isSessionAlive as isClaudeSessionAlive } from "../sdk/claude";
 
 const app = new Hono();
 
@@ -50,6 +51,12 @@ async function computeGhost(
 ): Promise<boolean> {
   if (agent.agentType === "system") return false;
 
+  // Claude Code agents — subprocess model, no server URL
+  if (agent.agentType === "claude_code" && agent.providerSessionId) {
+    return !(await isClaudeSessionAlive(agent.providerSessionId));
+  }
+
+  // OpenCode agents — REST client-server model
   if (agent.serverUrl && agent.providerSessionId) {
     // Direct session lookup — works cross-project
     return !(await isSessionAliveViaGet(agent.serverUrl, agent.providerSessionId));

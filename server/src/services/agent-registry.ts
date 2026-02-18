@@ -2,7 +2,8 @@
  * Agent registration and session management.
  *
  * Single entry point: registerOrConnectAgent() handles both new registrations
- * and reconnections. All agents are type "opencode" (determined server-side).
+ * and reconnections. Agent type is determined by the caller (MCP register tool)
+ * and can be "opencode", "claude_code", or "system".
  */
 
 import { eq, and, sql } from "drizzle-orm";
@@ -21,6 +22,7 @@ import {
 import { broadcastEvent, agentStatusEvent, channelCreatedEvent, featureUpdateEvent } from "./broadcaster";
 import { generateUniqueName } from "./name-generator";
 import { promptEngine } from "./prompt-engine";
+import { markSessionAlive as markClaudeSessionAlive } from "../sdk/claude";
 
 /** Derive project name from path (git repo name or folder basename) */
 function deriveProjectName(projectPath: string): string {
@@ -46,15 +48,23 @@ function makeChannelName(projectName: string): string {
  *
  * This is the single entry point for agent login. The `sessionId` is
  * required — it's the agent's login credential.
+ *
+ * @param agentType - Provider type: "opencode" or "claude_code" (default: "opencode")
  */
 export function registerOrConnectAgent(opts: {
   sessionId: string;
   projectPath: string;
   agentName?: string | null;
   serverUrl?: string | null;
+  agentType?: string;
 }): Record<string, unknown> {
   const { sessionId, projectPath, agentName, serverUrl } = opts;
-  const agentType = "opencode"; // All agents are opencode
+  const agentType = opts.agentType ?? "opencode";
+
+  // For Claude Code agents, mark the session as alive on registration
+  if (agentType === "claude_code") {
+    markClaudeSessionAlive(sessionId);
+  }
 
   // --- Reconnect path: agent_name provided and exists ---
   if (agentName) {
@@ -66,7 +76,7 @@ export function registerOrConnectAgent(opts: {
       .get();
 
     if (existing) {
-      return reconnectAgent(existing, sessionId, serverUrl ?? null, projectPath);
+      return reconnectAgent(existing, sessionId, serverUrl ?? null, projectPath, agentType);
     }
     // Agent name provided but doesn't exist — fall through to create new
   }
@@ -84,17 +94,20 @@ function reconnectAgent(
   agent: typeof agents.$inferSelect,
   sessionId: string,
   serverUrl: string | null,
-  projectPath: string
+  projectPath: string,
+  agentType: string = "opencode"
 ): Record<string, unknown> {
   const db = getDb();
 
   // Update invocation fields
   const updates: Partial<typeof agents.$inferInsert> = {
     providerSessionId: sessionId,
-    agentType: "opencode",
+    agentType,
     status: "online",
   };
   if (serverUrl) updates.serverUrl = serverUrl;
+  // Claude Code agents don't have a server URL — clear it if switching providers
+  if (agentType === "claude_code" && !serverUrl) updates.serverUrl = null;
   if (projectPath) {
     updates.projectPath = projectPath;
     updates.projectName = deriveProjectName(projectPath);

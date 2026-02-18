@@ -160,6 +160,9 @@ startLivenessTask();
 // When TalkTo restarts, OpenCode's MCP clients lose their connection and
 // never retry. We trigger a disconnect/connect cycle on each OpenCode server
 // so agents get fresh MCP sessions with working tools.
+//
+// Note: This only applies to OpenCode agents. Claude Code agents use a
+// subprocess model and reconnect automatically via the MCP register tool.
 
 async function reconnectOpenCodeMcpClients() {
   const serverUrls = new Set<string>();

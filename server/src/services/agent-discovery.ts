@@ -1,6 +1,9 @@
 /**
  * Agent discovery — verify agent liveness and resolve invocation info.
  *
+ * Supports multiple agent providers (OpenCode, Claude Code). Routes
+ * liveness checks to the appropriate SDK based on agent_type.
+ *
  * No auto-discovery: if an agent's session is dead, it becomes a ghost
  * and must re-register with a valid session_id. Auto-discovery was removed
  * because all OpenCode sessions share the same directory path, making
@@ -10,7 +13,8 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { agents } from "../db/schema";
-import { isSessionAlive } from "../sdk/opencode";
+import { isSessionAlive as isOpenCodeSessionAlive } from "../sdk/opencode";
+import { isSessionAlive as isClaudeSessionAlive } from "../sdk/claude";
 
 // ---------------------------------------------------------------------------
 // Invocation info resolution
@@ -20,6 +24,7 @@ export interface InvocationInfo {
   serverUrl: string;
   sessionId: string;
   projectPath: string;
+  agentType: string;
 }
 
 /**
@@ -56,14 +61,23 @@ export async function getAgentInvocationInfo(
   let serverUrl = agent.serverUrl;
   let sessionId = agent.providerSessionId;
 
-  // If we have credentials, verify liveness
-  if (serverUrl && sessionId) {
-    const alive = await isSessionAlive(serverUrl, sessionId);
+  // If we have credentials, verify liveness based on agent type
+  if (sessionId) {
+    let alive = false;
+
+    if (agent.agentType === "claude_code") {
+      // Claude Code — subprocess model, no server URL needed
+      alive = await isClaudeSessionAlive(sessionId);
+    } else if (serverUrl) {
+      // OpenCode — REST client-server model
+      alive = await isOpenCodeSessionAlive(serverUrl, sessionId);
+    }
+
     if (alive) {
       console.log(
-        `[DISCOVERY] '${agentName}' is alive: server=${serverUrl} session=${sessionId}`
+        `[DISCOVERY] '${agentName}' is alive: type=${agent.agentType} server=${serverUrl ?? "n/a"} session=${sessionId}`
       );
-      return { serverUrl, sessionId, projectPath: agent.projectPath };
+      return { serverUrl: serverUrl ?? "", sessionId, projectPath: agent.projectPath, agentType: agent.agentType };
     }
 
     // Session is dead — clear stale credentials
@@ -127,9 +141,14 @@ export async function isAgentGhost(agentName: string): Promise<boolean> {
   if (!agent) return false;
   if (agent.agentType === "system") return false;
 
-  // If agent has credentials, check if session is alive
-  if (agent.serverUrl && agent.providerSessionId) {
-    const alive = await isSessionAlive(agent.serverUrl, agent.providerSessionId);
+  // If agent has credentials, check if session is alive (route by provider)
+  if (agent.providerSessionId) {
+    let alive = false;
+    if (agent.agentType === "claude_code") {
+      alive = await isClaudeSessionAlive(agent.providerSessionId);
+    } else if (agent.serverUrl) {
+      alive = await isOpenCodeSessionAlive(agent.serverUrl, agent.providerSessionId);
+    }
     if (alive) return false;
     // Session is dead — agent is a ghost
     return true;

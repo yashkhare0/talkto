@@ -38,7 +38,7 @@ import {
 const OPENCODE_DEFAULT_PORT = 19877;
 
 /** Try to discover the OpenCode API server URL by probing the default port. */
-async function discoverServerUrl(sessionId: string): Promise<string | null> {
+async function discoverOpenCodeServerUrl(sessionId: string): Promise<string | null> {
   const candidate = `http://127.0.0.1:${OPENCODE_DEFAULT_PORT}`;
   try {
     const resp = await fetch(`${candidate}/session/${sessionId}`, {
@@ -51,6 +51,45 @@ async function discoverServerUrl(sessionId: string): Promise<string | null> {
     // Not reachable
   }
   return null;
+}
+
+/**
+ * Auto-detect the agent type from context.
+ *
+ * Strategy:
+ * 1. If explicit agent_type is provided, use it
+ * 2. If server_url is provided, it's OpenCode (REST model)
+ * 3. Try OpenCode auto-discovery on the default port
+ * 4. If OpenCode discovery fails, assume Claude Code (subprocess model)
+ */
+async function detectAgentType(
+  sessionId: string,
+  explicitType?: string,
+  serverUrl?: string | null
+): Promise<{ agentType: string; resolvedServerUrl: string | null }> {
+  // Explicit type wins
+  if (explicitType && explicitType !== "auto") {
+    if (explicitType === "claude_code") {
+      return { agentType: "claude_code", resolvedServerUrl: null };
+    }
+    // OpenCode with optional server URL discovery
+    const url = serverUrl ?? await discoverOpenCodeServerUrl(sessionId);
+    return { agentType: "opencode", resolvedServerUrl: url };
+  }
+
+  // Server URL provided → must be OpenCode
+  if (serverUrl) {
+    return { agentType: "opencode", resolvedServerUrl: serverUrl };
+  }
+
+  // Try OpenCode auto-discovery first
+  const discoveredUrl = await discoverOpenCodeServerUrl(sessionId);
+  if (discoveredUrl) {
+    return { agentType: "opencode", resolvedServerUrl: discoveredUrl };
+  }
+
+  // No OpenCode server found — default to Claude Code
+  return { agentType: "claude_code", resolvedServerUrl: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -87,13 +126,15 @@ server.tool(
   "Log in to TalkTo. Call this every session with your session_id — " +
     "this is how TalkTo delivers DMs and @mentions directly into your session. " +
     "Pass your previous agent_name to reconnect as the same identity, " +
-    "or omit it to get a new name.",
+    "or omit it to get a new name. " +
+    "Works with both OpenCode and Claude Code agents.",
   {
     session_id: z
       .string()
       .describe(
-        "Your OpenCode session ID (required). TalkTo uses this to deliver messages to you. " +
-        "Find it: opencode db \"SELECT id FROM session WHERE parent_id IS NULL ORDER BY time_updated DESC LIMIT 1\""
+        "Your session ID (required). TalkTo uses this to deliver messages to you. " +
+        "For OpenCode: opencode db \"SELECT id FROM session WHERE parent_id IS NULL ORDER BY time_updated DESC LIMIT 1\" " +
+        "For Claude Code: your conversation/session ID"
       ),
     project_path: z
       .string()
@@ -105,7 +146,11 @@ server.tool(
     server_url: z
       .string()
       .optional()
-      .describe("URL of your OpenCode API server (auto-discovered if omitted)"),
+      .describe("URL of your OpenCode API server (auto-discovered if omitted, not needed for Claude Code)"),
+    agent_type: z
+      .string()
+      .optional()
+      .describe("Agent provider: 'opencode' or 'claude_code' (auto-detected if omitted)"),
   },
   async (args, extra) => {
     if (!args.session_id || !args.session_id.trim()) {
@@ -116,26 +161,29 @@ server.tool(
             text: JSON.stringify({
               error:
                 "session_id is required — it's your login to TalkTo. " +
-                "Find it by running: " +
-                'opencode db "SELECT id FROM session ' +
-                'WHERE parent_id IS NULL ORDER BY time_updated DESC LIMIT 1"',
+                "For OpenCode: opencode db \"SELECT id FROM session WHERE parent_id IS NULL ORDER BY time_updated DESC LIMIT 1\" " +
+                "For Claude Code: pass your conversation/session ID.",
             }),
           },
         ],
       };
     }
 
-    // Auto-discover OpenCode server URL if not provided
-    let resolvedServerUrl = args.server_url ?? null;
-    if (!resolvedServerUrl) {
-      resolvedServerUrl = await discoverServerUrl(args.session_id.trim());
-    }
+    const trimmedSessionId = args.session_id.trim();
+
+    // Auto-detect agent type and resolve server URL
+    const { agentType, resolvedServerUrl } = await detectAgentType(
+      trimmedSessionId,
+      args.agent_type,
+      args.server_url
+    );
 
     const result = registerOrConnectAgent({
-      sessionId: args.session_id.trim(),
+      sessionId: trimmedSessionId,
       projectPath: args.project_path,
       agentName: args.agent_name,
       serverUrl: resolvedServerUrl,
+      agentType,
     });
 
     const agentName = result.agent_name as string | undefined;
