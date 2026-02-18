@@ -464,6 +464,12 @@ export function extractTextFromParts(parts: Part[]): string {
  * If the TUI is not connected, the call fails with an error.
  *
  * This is a lightweight check — clearPrompt is a no-op if prompt is empty.
+ *
+ * KNOWN LIMITATION: This check is server-wide, not session-scoped. If
+ * multiple agents share the same OpenCode server (common in multi-project
+ * setups), this returns true when ANY TUI is connected, not necessarily
+ * the target agent's TUI. The TUI prompt will go to whichever project's
+ * TUI is currently connected.
  */
 export async function isTuiActive(serverUrl: string): Promise<boolean> {
   try {
@@ -629,6 +635,14 @@ export async function promptViaTui(
         }
       } catch {
         // Stream ended or errored — expected during cleanup
+      } finally {
+        // If stream ends without session.idle (e.g., SSE disconnect), resolve
+        // with whatever text we accumulated so far rather than waiting for timeout
+        if (!responseCaptured && accumulatedText) {
+          responseCaptured = true;
+          callbacks.onComplete?.();
+          resolveResponse?.(accumulatedText);
+        }
       }
     })();
 

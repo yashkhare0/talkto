@@ -200,6 +200,9 @@ async function invokeAgent(
     };
 
     // Detect TUI and choose invocation path
+    // NOTE: isTuiActive() is server-wide — if multiple agents share the same
+    // OpenCode server, this may detect another agent's TUI as active. The
+    // TUI prompt will go to whichever project's TUI is connected.
     const tuiActive = await isTuiActive(info.serverUrl);
     let result: { text: string; cost: number; tokens: { input: number; output: number } } | null;
 
