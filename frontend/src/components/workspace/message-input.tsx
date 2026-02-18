@@ -32,6 +32,14 @@ export function MessageInput({ channelId }: MessageInputProps) {
   const mentionables = useMemo(() => {
     const list: { name: string; label: string; type: string; online: boolean }[] = [];
 
+    // @all — invoke all agents at once
+    list.push({
+      name: "all",
+      label: "all — notify all agents",
+      type: "group",
+      online: true,
+    });
+
     // Add human user
     if (me) {
       list.push({
@@ -208,12 +216,14 @@ export function MessageInput({ channelId }: MessageInputProps) {
                   <AvatarFallback
                     className={cn(
                       "text-[10px]",
-                      m.type === "human"
-                        ? "bg-amber-500/15 text-amber-600"
-                        : "bg-violet-500/15 text-violet-500",
+                      m.type === "group"
+                        ? "bg-blue-500/15 text-blue-500"
+                        : m.type === "human"
+                          ? "bg-amber-500/15 text-amber-600"
+                          : "bg-violet-500/15 text-violet-500",
                     )}
                   >
-                    {m.name[0]?.toUpperCase()}
+                    {m.type === "group" ? "*" : m.name[0]?.toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <span className="truncate font-medium">{m.label}</span>

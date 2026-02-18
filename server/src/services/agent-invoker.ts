@@ -18,9 +18,9 @@
  * Invocations run as fire-and-forget background tasks with typing state broadcasts.
  */
 
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, ne } from "drizzle-orm";
 import { getDb } from "../db";
-import { agents, messages, users } from "../db/schema";
+import { agents, channels, messages, users } from "../db/schema";
 import {
   broadcastEvent,
   newMessageEvent,
@@ -79,6 +79,57 @@ function extractMentionsFromText(text: string, excludeSender?: string): string[]
   }
 
   return validAgents;
+}
+
+// ---------------------------------------------------------------------------
+// @all expansion — resolve to actual agent names based on channel context
+// ---------------------------------------------------------------------------
+
+/**
+ * Expand `@all` into concrete agent names based on channel context.
+ *
+ * - In #general, #random, or other non-project channels: all invocable agents
+ *   (non-ghost, non-system, with server_url + session registered).
+ * - In #project-* channels: only invocable agents whose projectName matches.
+ * - In DM channels: @all is ignored (makes no sense in 1-on-1).
+ *
+ * Always excludes the sender to prevent self-invocation.
+ */
+function expandAtAll(channelName: string, excludeSender: string): string[] {
+  const db = getDb();
+
+  // DM channels — @all doesn't apply
+  if (channelName.startsWith("#dm-")) return [];
+
+  // Fetch all invocable agents in one query
+  const allInvocable = db
+    .select({
+      agentName: agents.agentName,
+      projectName: agents.projectName,
+      serverUrl: agents.serverUrl,
+      providerSessionId: agents.providerSessionId,
+    })
+    .from(agents)
+    .where(
+      and(
+        ne(agents.agentType, "system"),
+        ne(agents.status, "ghost"),
+        ne(agents.agentName, excludeSender)
+      )
+    )
+    .all()
+    .filter((a) => a.serverUrl && a.providerSessionId);
+
+  // Project channels — filter to matching project
+  if (channelName.startsWith("#project-")) {
+    const projectSlug = channelName.replace("#project-", "");
+    return allInvocable
+      .filter((a) => a.projectName.toLowerCase().replace(/[ _]/g, "-") === projectSlug)
+      .map((a) => a.agentName);
+  }
+
+  // General/random/custom channels — all invocable agents
+  return allInvocable.map((a) => a.agentName);
 }
 
 // ---------------------------------------------------------------------------
@@ -141,8 +192,20 @@ async function _invokeForMessage(
   mentions: string[] | null,
   depth: number
 ): Promise<void> {
+  // Expand @all into concrete agent names before processing
+  let resolvedMentions = mentions;
+  if (mentions && mentions.includes("all")) {
+    const expanded = expandAtAll(channelName, senderName);
+    // Merge @all expansion with any other explicit mentions, deduplicated
+    const explicit = mentions.filter((m) => m !== "all");
+    resolvedMentions = [...new Set([...explicit, ...expanded])];
+    console.log(
+      `[INVOKE] @all expanded to: ${expanded.join(", ") || "none"} in ${channelName}`
+    );
+  }
+
   console.log(
-    `[INVOKE] Starting: sender=${senderName} channel=${channelName} mentions=${JSON.stringify(mentions)} depth=${depth}`
+    `[INVOKE] Starting: sender=${senderName} channel=${channelName} mentions=${JSON.stringify(resolvedMentions)} depth=${depth}`
   );
   const invoked = new Set<string>();
 
@@ -158,12 +221,12 @@ async function _invokeForMessage(
   }
 
   // @mentions → invoke each mentioned agent
-  if (mentions && mentions.length > 0) {
+  if (resolvedMentions && resolvedMentions.length > 0) {
     // For @mentions, build context from recent channel messages
     const context = fetchRecentContext(channelId, 5);
 
     // Invoke mentioned agents in parallel
-    const tasks = mentions
+    const tasks = resolvedMentions
       .filter((name) => !invoked.has(name) && name !== senderName)
       .map(async (mentioned) => {
         const prompt = formatChannelPrompt(
