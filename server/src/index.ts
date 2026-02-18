@@ -22,7 +22,7 @@ import {
   type WsData,
 } from "./services/ws-manager";
 import { startLivenessTask, stopLivenessTask } from "./routes/agents";
-import { mcpServer } from "./mcp/server";
+import { createMcpServer } from "./mcp/server";
 
 // Route modules
 import usersRoutes from "./routes/users";
@@ -88,7 +88,7 @@ app.all("/mcp", async (c) => {
     }
   }
 
-  // New session — create transport, connect, handle request
+  // New session — create transport + new MCP server instance, connect, handle
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: () => crypto.randomUUID(),
     enableJsonResponse: true,
@@ -108,8 +108,9 @@ app.all("/mcp", async (c) => {
     }
   };
 
-  // Connect a new MCP server instance for this session
-  await mcpServer.connect(transport);
+  // Each session gets its own McpServer instance (connect() can only be called once per instance)
+  const server = createMcpServer();
+  await server.connect(transport);
 
   try {
     return await transport.handleRequest(c.req.raw);

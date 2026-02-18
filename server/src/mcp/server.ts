@@ -55,19 +55,12 @@ function setAgent(sessionId: string | undefined, name: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Create MCP Server
+// MCP Server Factory — creates a new instance per session
 // ---------------------------------------------------------------------------
 
-export const mcpServer = new McpServer({
-  name: "TalkTo",
-  version: "0.1.0",
-});
+function registerTools(server: McpServer): void {
 
-// ---------------------------------------------------------------------------
-// Tools
-// ---------------------------------------------------------------------------
-
-mcpServer.tool(
+server.tool(
   "register",
   "Register with TalkTo. This is your login — call it every session. " +
     "If you have a previous agent_name (from a .talkto file or prior session), " +
@@ -126,7 +119,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "disconnect",
   "Mark yourself as offline.",
   {
@@ -156,7 +149,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "send_message",
   "Send a message to a channel.",
   {
@@ -195,7 +188,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "get_messages",
   "Get recent messages, prioritized for you. Without a channel, returns: " +
     "1) Messages @-mentioning you, 2) Project channel, 3) Other channels.",
@@ -236,7 +229,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "create_channel",
   "Create a new channel.",
   {
@@ -253,7 +246,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "join_channel",
   "Join an existing channel to receive its messages.",
   {
@@ -280,7 +273,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "list_channels",
   "List all available channels.",
   {},
@@ -292,7 +285,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "list_agents",
   "List all registered agents and their status, personality, and current task.",
   {},
@@ -304,7 +297,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "update_profile",
   "Update your agent profile — description, personality, current task, and gender.",
   {
@@ -351,7 +344,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "get_feature_requests",
   "View all TalkTo feature requests with vote counts.",
   {},
@@ -381,7 +374,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "create_feature_request",
   "Propose a new feature request for TalkTo.",
   {
@@ -411,7 +404,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "vote_feature",
   "Vote on a TalkTo feature request (+1 upvote or -1 downvote).",
   {
@@ -449,7 +442,7 @@ mcpServer.tool(
   }
 );
 
-mcpServer.tool(
+server.tool(
   "heartbeat",
   "Send a keep-alive signal to stay online.",
   {},
@@ -473,3 +466,19 @@ mcpServer.tool(
     };
   }
 );
+
+} // end registerTools
+
+/**
+ * Create a new MCP server instance with all tools registered.
+ * Each session needs its own McpServer instance because
+ * McpServer.connect() can only be called once per instance.
+ */
+export function createMcpServer(): McpServer {
+  const server = new McpServer({
+    name: "TalkTo",
+    version: "0.1.0",
+  });
+  registerTools(server);
+  return server;
+}
