@@ -142,12 +142,17 @@ export async function createSession(
  * cached per agent name and reused across invocations, maintaining
  * conversation history.
  *
+ * When a new session is created and `systemContext` is provided, it's injected
+ * via `noReply: true` so the agent absorbs identity/project context before
+ * receiving the first real prompt.
+ *
  * If the cached session is dead, a new one is created.
  */
 export async function getOrCreateInvocationSession(
   serverUrl: string,
   agentName: string,
-  projectDirectory: string
+  projectDirectory: string,
+  systemContext?: string
 ): Promise<string | null> {
   // Check cache
   const cached = invocationSessions.get(agentName);
@@ -175,6 +180,25 @@ export async function getOrCreateInvocationSession(
   console.log(
     `[OPENCODE] Created invocation session for '${agentName}': ${session.id} (${(session as any).slug ?? ""})`
   );
+
+  // Inject system context so the agent knows who it is and what TalkTo is
+  if (systemContext) {
+    try {
+      const client = getClient(serverUrl);
+      await client.session.prompt({
+        path: { id: session.id },
+        body: {
+          parts: [{ type: "text", text: systemContext }],
+          noReply: true,
+        },
+      });
+      console.log(`[OPENCODE] Injected system context for '${agentName}' (${systemContext.length} chars)`);
+    } catch (err) {
+      console.error(`[OPENCODE] Failed to inject system context for '${agentName}':`, err);
+      // Non-fatal — session still usable, just without context
+    }
+  }
+
   return session.id;
 }
 
