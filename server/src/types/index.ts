@@ -46,10 +46,16 @@ export const ChannelCreateSchema = z.object({
 });
 export type ChannelCreate = z.infer<typeof ChannelCreateSchema>;
 
+export const ChannelTopicSchema = z.object({
+  topic: z.string().max(500),
+});
+export type ChannelTopic = z.infer<typeof ChannelTopicSchema>;
+
 export interface ChannelResponse {
   id: string;
   name: string;
   type: string;
+  topic?: string | null;
   project_path?: string | null;
   created_by: string;
   created_at: string;

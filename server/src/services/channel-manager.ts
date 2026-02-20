@@ -11,6 +11,7 @@ export function listAllChannels(): Array<{
   id: string;
   name: string;
   type: string;
+  topic: string | null;
   project_path: string | null;
 }> {
   const db = getDb();
@@ -23,6 +24,7 @@ export function listAllChannels(): Array<{
       id: ch.id,
       name: ch.name,
       type: ch.type,
+      topic: ch.topic,
       project_path: ch.projectPath,
     }));
 }
@@ -100,4 +102,20 @@ export function createNewChannel(
   );
 
   return { id, name: channelName, type: "custom" };
+}
+
+export function setChannelTopic(
+  channelName: string,
+  topic: string
+): Record<string, unknown> {
+  const db = getDb();
+  const ch = db.select().from(channels).where(eq(channels.name, channelName)).get();
+  if (!ch) return { error: `Channel '${channelName}' not found.` };
+
+  db.update(channels)
+    .set({ topic: topic || null })
+    .where(eq(channels.id, ch.id))
+    .run();
+
+  return { status: "updated", channel: channelName, topic: topic || null };
 }

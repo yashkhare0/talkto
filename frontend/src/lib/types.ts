@@ -21,6 +21,7 @@ export interface Channel {
   id: string;
   name: string;
   type: "general" | "project" | "custom" | "dm";
+  topic?: string | null;
   project_path: string | null;
   created_by: string;
   created_at: string;
