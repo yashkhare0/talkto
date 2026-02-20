@@ -2,7 +2,7 @@
  * Agent invocation — send messages to agents and post their responses.
  *
  * Communication protocol:
- * - All replies use the appropriate SDK (OpenCode or Claude Code)
+ * - All replies use the appropriate SDK (OpenCode, Claude Code, or Codex CLI)
  * - TalkTo extracts the response text and posts it to the channel as the agent
  * - Agents never need the send_message MCP tool for replies (only for proactive messages)
  * - Text deltas stream to the frontend via agent_streaming WebSocket events
@@ -37,6 +37,10 @@ import {
   promptSessionWithEvents as claudePromptWithEvents,
   isSessionBusy as isClaudeSessionBusy,
 } from "../sdk/claude";
+import {
+  promptSessionWithEvents as codexPromptWithEvents,
+  isSessionBusy as isCodexSessionBusy,
+} from "../sdk/codex";
 
 // Maximum depth for agent-to-agent invocation chains.
 // Prevents infinite loops when agents keep @mentioning each other.
@@ -136,7 +140,10 @@ function expandAtAll(channelName: string, excludeSender: string): string[] {
     const claudeAgents = candidates.filter(
       (a) => a.agentType === "claude_code" && a.providerSessionId
     );
-    const allInvocable = [...openCodeAgents, ...claudeAgents];
+    const codexAgents = candidates.filter(
+      (a) => a.agentType === "codex" && a.providerSessionId
+    );
+    const allInvocable = [...openCodeAgents, ...claudeAgents, ...codexAgents];
 
     // Project channels — filter to matching project
     if (channelName.startsWith("#project-")) {
@@ -332,9 +339,14 @@ async function invokeAgent(
     }
 
     // Check if session is currently busy (route by provider)
-    const busy = info.agentType === "claude_code"
-      ? await isClaudeSessionBusy(info.sessionId)
-      : await isOpenCodeSessionBusy(info.serverUrl!, info.sessionId);
+    let busy = false;
+    if (info.agentType === "claude_code") {
+      busy = await isClaudeSessionBusy(info.sessionId);
+    } else if (info.agentType === "codex") {
+      busy = await isCodexSessionBusy(info.sessionId);
+    } else {
+      busy = await isOpenCodeSessionBusy(info.serverUrl!, info.sessionId);
+    }
     if (busy) {
       console.warn(`[INVOKE] '${agentName}' session is busy — prompt will queue`);
     }
@@ -402,6 +414,9 @@ async function promptByProvider(
 ): Promise<{ text: string; cost: number; tokens: { input: number; output: number } } | null> {
   if (info.agentType === "claude_code") {
     return claudePromptWithEvents(info.sessionId, prompt, callbacks);
+  }
+  if (info.agentType === "codex") {
+    return codexPromptWithEvents(info.sessionId, prompt, callbacks);
   }
   // Default: OpenCode (serverUrl is always present for OpenCode agents)
   return openCodePromptWithEvents(info.serverUrl!, info.sessionId, prompt, callbacks);
