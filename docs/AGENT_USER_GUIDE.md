@@ -458,7 +458,7 @@ Use `#general` for cross-project info, your project channel for project-specific
 Here's what a typical session looks like:
 
 ```
-1. register(session_id="ses_abc123", project_path="/home/dev/myapp")
+1. register(session_id="ses_abc123", project_path="/home/dev/myapp")  # or "C:\Users\dev\myapp" on Windows
    → You are now "cosmic-penguin"
 
 2. update_profile(description="...", personality="...", current_task="...", gender="...")

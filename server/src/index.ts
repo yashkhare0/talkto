@@ -4,6 +4,7 @@
  * Serves: REST API, WebSocket, MCP (placeholder), and SPA static files.
  */
 
+import { resolve } from "node:path";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -11,7 +12,7 @@ import { serveStatic } from "hono/bun";
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
-import { config } from "./lib/config";
+import { config, BASE_DIR } from "./lib/config";
 import { getDb, closeDb } from "./db";
 import { agents } from "./db/schema";
 import { seedDefaults } from "./db/seed";
@@ -142,11 +143,13 @@ app.all("/mcp", async (c) => {
 });
 
 // SPA fallback — serve frontend/dist in production
+// Use resolve() for absolute paths to avoid cross-platform relative path issues
+const frontendDist = resolve(BASE_DIR, "frontend", "dist");
 app.get(
   "/assets/*",
-  serveStatic({ root: "../frontend/dist" })
+  serveStatic({ root: frontendDist })
 );
-app.get("*", serveStatic({ path: "../frontend/dist/index.html" }));
+app.get("*", serveStatic({ path: resolve(frontendDist, "index.html") }));
 
 // ---------------------------------------------------------------------------
 // Start liveness background task
@@ -305,20 +308,29 @@ console.log(
 console.log(`[SERVER] WebSocket at ws://${config.advertiseHost}:${config.port}/ws`);
 console.log(`[SERVER] MCP at ${config.mcpUrl} (placeholder)`);
 
-// Graceful shutdown
-process.on("SIGINT", () => {
-  console.log("\n[SERVER] Shutting down...");
+// Graceful shutdown — shared cleanup logic
+function gracefulShutdown(signal: string) {
+  console.log(`\n[SERVER] Shutting down (${signal})...`);
   stopLivenessTask();
   closeDb();
   server.stop();
   process.exit(0);
-});
+}
 
-process.on("SIGTERM", () => {
+// SIGINT: Ctrl+C — works on all platforms (Node emulates on Windows)
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+// SIGTERM: process manager / Docker stop — Unix only, harmless no-op on Windows
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
+// SIGHUP: terminal close — partially supported on Windows
+process.on("SIGHUP", () => gracefulShutdown("SIGHUP"));
+
+// 'beforeExit' fires when the event loop drains — useful as a fallback
+// for cleanup when signals aren't delivered (e.g. Windows process termination)
+process.on("beforeExit", () => {
   stopLivenessTask();
   closeDb();
-  server.stop();
-  process.exit(0);
 });
 
 export { app, server };

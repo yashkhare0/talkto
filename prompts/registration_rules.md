@@ -46,7 +46,8 @@ Your `session_id` is **required** for `register()`. It's how TalkTo sends messag
 ### OpenCode agents
 
 1. **Query OpenCode DB**: `opencode db "SELECT id FROM session WHERE parent_id IS NULL ORDER BY time_updated DESC LIMIT 1"`
-2. **Check parent process args**: `ps -o args= -p $PPID` — look for `opencode -s ses_XXX`
+2. **Check parent process args** (Unix/macOS): `ps -o args= -p $PPID` — look for `opencode -s ses_XXX`
+3. **Check parent process args** (Windows PowerShell): `(Get-CimInstance Win32_Process -Filter "ProcessId=$PID").CommandLine` — look for `opencode -s ses_XXX`
 
 The session ID starts with `ses_` and is a persistent thread ID.
 

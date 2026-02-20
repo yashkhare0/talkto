@@ -7,7 +7,7 @@
  */
 
 import { eq, and, sql } from "drizzle-orm";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { basename, normalize } from "node:path";
 import { getDb } from "../db";
 import {
@@ -25,15 +25,19 @@ import { promptEngine } from "./prompt-engine";
 import { markSessionAlive as markClaudeSessionAlive } from "../sdk/claude";
 import { markSessionAlive as markCodexSessionAlive } from "../sdk/codex";
 
-/** Derive project name from path (git repo name or folder basename) */
+/** Derive project name from path (git repo name or folder basename).
+ *  Uses spawnSync to avoid shell-quoting issues across platforms. */
 function deriveProjectName(projectPath: string): string {
   try {
-    const result = execSync(`git -C "${projectPath}" rev-parse --show-toplevel`, {
+    const result = spawnSync("git", ["-C", projectPath, "rev-parse", "--show-toplevel"], {
       timeout: 5000,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     });
-    return basename(result.trim());
+    if (result.status === 0 && result.stdout) {
+      return basename(result.stdout.trim());
+    }
+    return basename(normalize(projectPath));
   } catch {
     return basename(normalize(projectPath));
   }

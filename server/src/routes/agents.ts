@@ -19,7 +19,22 @@ const app = new Hono();
 const ghostCache = new Map<string, boolean>();
 let livenessInterval: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Check if a process with the given PID is alive.
+ *
+ * On Unix, `process.kill(pid, 0)` sends signal 0 which checks existence
+ * without killing. On Windows, signal 0 can actually kill the process in
+ * some Node.js versions, so we skip the PID-based check entirely and
+ * return `true` (optimistic) — the SDK-based `isSessionAliveViaGet()`
+ * is the primary liveness check and works cross-platform.
+ */
 function isPidAlive(pid: number): boolean {
+  if (process.platform === "win32") {
+    // On Windows, process.kill(pid, 0) behavior is unreliable.
+    // Return true to avoid false ghost detection; the SDK-based
+    // session check (isSessionAliveViaGet) is the authoritative source.
+    return true;
+  }
   try {
     process.kill(pid, 0);
     return true;

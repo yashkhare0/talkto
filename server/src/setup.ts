@@ -84,10 +84,11 @@ async function exec(
   return { ok: exitCode === 0, stdout: stdout.trim(), stderr: stderr.trim() };
 }
 
-/** Check if a command exists on PATH */
+/** Check if a command exists on PATH (cross-platform: `which` on Unix, `where` on Windows) */
 async function commandExists(cmd: string): Promise<string | null> {
-  const result = await exec("which", [cmd]);
-  return result.ok ? result.stdout : null;
+  const which = process.platform === "win32" ? "where" : "which";
+  const result = await exec(which, [cmd]);
+  return result.ok ? result.stdout.split(/\r?\n/)[0] : null;
 }
 
 // ── Provider definitions ────────────────────────────────────────

@@ -489,30 +489,40 @@ export function extractTextFromParts(parts: Part[]): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * Normalize a file path for cross-platform comparison.
+ * Converts backslashes to forward slashes and strips trailing slashes.
+ * This ensures Windows paths (C:\Users\...) match Unix paths (C:/Users/...).
+ */
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/$/, "");
+}
+
+/**
  * Find a session matching a project path from a list of sessions.
  * Matches by the session's `directory` field.
+ * Cross-platform: normalizes path separators before comparison.
  */
 export function matchSessionByProject(
   sessions: Session[],
   projectPath: string
 ): Session | null {
-  const normalized = projectPath.replace(/\/$/, "");
+  const normalized = normalizePath(projectPath);
 
   // Exact match first
   const exact = sessions.find(
-    (s) => s.directory?.replace(/\/$/, "") === normalized
+    (s) => normalizePath(s.directory ?? "") === normalized
   );
   if (exact) return exact;
 
   // Parent directory match (project is a subdirectory of the session's cwd)
   const parent = sessions.find((s) =>
-    normalized.startsWith(s.directory?.replace(/\/$/, "") + "/")
+    normalized.startsWith(normalizePath(s.directory ?? "") + "/")
   );
   if (parent) return parent;
 
   // Child directory match (session's cwd is inside the project)
   const child = sessions.find((s) =>
-    s.directory?.replace(/\/$/, "").startsWith(normalized + "/")
+    normalizePath(s.directory ?? "").startsWith(normalized + "/")
   );
   if (child) return child;
 

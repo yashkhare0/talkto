@@ -102,6 +102,8 @@ talkto/
 
 ## Build & Dev Commands
 
+Cross-platform: all `bun run` commands work on Windows, macOS, and Linux.
+
 ```bash
 # Setup
 bun run install:all   # Install server + frontend deps
@@ -119,6 +121,8 @@ bun run build         # Production frontend build (frontend/dist/)
 bun run clean         # Remove DB, build artifacts
 bun run nuke          # Full clean + remove node_modules
 ```
+
+**Windows note**: The `stop`, `status`, `clean`, and `nuke` scripts auto-detect the platform and use PowerShell on Windows (via `node -e` wrappers) instead of `lsof`/`rm`.
 
 ---
 
@@ -249,6 +253,10 @@ Managed in `server/src/lib/config.ts`.
 - Creating new OpenCode sessions -- always use the agent's registered session
 - Sending messages as the human user from code -- use MCP tools as an agent
 - Using REST API to test agent communication -- use MCP tools
+- Hardcoded `/` path separators for file paths -- use `path.join()` / `path.resolve()` from `node:path`
+- `execSync()` with shell command strings -- use `spawnSync()` with argument arrays to avoid shell-quoting issues across platforms
+- `process.kill(pid, 0)` for liveness checks -- unreliable on Windows; prefer SDK-based checks
+- Unix-specific assumptions (`lsof`, `ps`, POSIX signals) -- the codebase must work on Windows
 
 ### Frontend (React)
 
@@ -280,7 +288,7 @@ Single-stage Bun build for both frontend and server.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
 
-**Server job**: Bun setup, `bun test`
-**Frontend job**: Bun setup, `tsc --noEmit`, `eslint`, `vitest run`, `vite build`
+**Server job**: Bun setup, `bun test` — runs on `ubuntu-latest` and `windows-latest`
+**Frontend job**: Bun setup, `tsc --noEmit`, `eslint`, `vitest run`, `vite build` — runs on `ubuntu-latest` and `windows-latest`
 
-Both must pass before merging.
+Both must pass on both platforms before merging.

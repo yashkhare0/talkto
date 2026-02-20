@@ -63,7 +63,7 @@ describe("Database Schema", () => {
         id: userId,
         agentName: "cool-fox",
         agentType: "opencode",
-        projectPath: "/tmp/test",
+        projectPath: "/home/dev/test-project",
         projectName: "test",
         status: "online",
       })
@@ -93,7 +93,7 @@ describe("Database Schema", () => {
         id: id1,
         agentName: "dup-agent",
         agentType: "opencode",
-        projectPath: "/tmp",
+        projectPath: "/home/dev/project-a",
         projectName: "test",
       })
       .run();
@@ -108,7 +108,7 @@ describe("Database Schema", () => {
           id: id2,
           agentName: "dup-agent",
           agentType: "opencode",
-          projectPath: "/tmp",
+          projectPath: "/home/dev/project-b",
           projectName: "test",
         })
         .run();

@@ -124,6 +124,62 @@ describe("matchSessionByProject", () => {
     const result = matchSessionByProject(sessions, "/Users/test/project");
     expect(result).toBeNull();
   });
+
+  // --- Windows path tests ---
+
+  test("exact match with Windows backslash paths", () => {
+    const sessions = [
+      mockSession({ id: "ses_1", directory: "C:\\Users\\dev\\project" }),
+    ];
+    const result = matchSessionByProject(sessions, "C:\\Users\\dev\\project");
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe("ses_1");
+  });
+
+  test("matches Windows backslash session against forward-slash query", () => {
+    const sessions = [
+      mockSession({ id: "ses_1", directory: "C:\\Users\\dev\\project" }),
+    ];
+    const result = matchSessionByProject(sessions, "C:/Users/dev/project");
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe("ses_1");
+  });
+
+  test("parent directory match with Windows paths", () => {
+    const sessions = [
+      mockSession({ id: "ses_1", directory: "C:\\Users\\dev\\monorepo" }),
+    ];
+    const result = matchSessionByProject(
+      sessions,
+      "C:\\Users\\dev\\monorepo\\packages\\server"
+    );
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe("ses_1");
+  });
+
+  test("child directory match with Windows paths", () => {
+    const sessions = [
+      mockSession({
+        id: "ses_1",
+        directory: "C:\\Users\\dev\\project\\packages\\server",
+      }),
+    ];
+    const result = matchSessionByProject(sessions, "C:\\Users\\dev\\project");
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe("ses_1");
+  });
+
+  test("mixed separators: backslash session, forward-slash parent match", () => {
+    const sessions = [
+      mockSession({ id: "ses_1", directory: "C:\\Users\\dev\\monorepo" }),
+    ];
+    const result = matchSessionByProject(
+      sessions,
+      "C:/Users/dev/monorepo/packages/backend"
+    );
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe("ses_1");
+  });
 });
 
 // ---------------------------------------------------------------------------
