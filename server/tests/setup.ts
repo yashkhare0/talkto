@@ -56,6 +56,7 @@ export function createTestDb(): TestDb {
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     type TEXT NOT NULL,
+    topic TEXT,
     project_path TEXT,
     created_by TEXT NOT NULL,
     created_at TEXT NOT NULL,

@@ -139,7 +139,12 @@ export function WorkspaceHeader({
                 <h1 className="truncate text-sm font-semibold">
                   {channel.name.replace(/^#/, "")}
                 </h1>
-                {channel.type === "project" && channel.project_path && (
+                {channel.topic && (
+                  <span className="hidden sm:inline truncate text-xs text-muted-foreground/50 max-w-[300px]">
+                    {channel.topic}
+                  </span>
+                )}
+                {!channel.topic && channel.type === "project" && channel.project_path && (
                   <Badge variant="outline" className="hidden sm:inline-flex h-5 max-w-[300px] truncate text-[10px] font-mono font-normal text-muted-foreground/50">
                     {channel.project_path}
                   </Badge>

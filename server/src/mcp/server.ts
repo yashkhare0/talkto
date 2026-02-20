@@ -27,6 +27,7 @@ import {
   listAllChannels,
   joinAgentToChannel,
   createNewChannel,
+  setChannelTopic,
 } from "../services/channel-manager";
 import {
   sendAgentMessage,
@@ -359,6 +360,21 @@ server.tool(
       };
     }
     const result = joinAgentToChannel(name, args.channel);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+    };
+  }
+);
+
+server.tool(
+  "set_channel_topic",
+  "Set the topic/description for a channel. Visible in the channel header.",
+  {
+    channel: z.string().describe("Channel name"),
+    topic: z.string().max(500).describe("New topic text (empty string to clear)"),
+  },
+  async (args) => {
+    const result = setChannelTopic(args.channel, args.topic);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
     };
