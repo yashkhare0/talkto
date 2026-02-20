@@ -1,11 +1,14 @@
 import { defineConfig } from "drizzle-kit";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   out: "./drizzle",
   schema: "./src/db/schema.ts",
   dialect: "sqlite",
   dbCredentials: {
-    url: resolve(import.meta.dir, "..", "data", "talkto.db"),
+    url: resolve(__dirname, "..", "data", "talkto.db"),
   },
 });

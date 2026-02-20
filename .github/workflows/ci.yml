@@ -28,34 +28,33 @@ jobs:
         working-directory: server
 
   frontend:
-    name: Frontend (typecheck + test + build)
+    name: Frontend (typecheck + lint + test + build)
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: "20"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: "9"
+          bun-version: latest
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install
         working-directory: frontend
 
       - name: Typecheck (tsc)
-        run: npx tsc -b --noEmit
+        run: bunx tsc -b --noEmit
+        working-directory: frontend
+
+      - name: Lint (eslint)
+        run: bun run lint
         working-directory: frontend
 
       - name: Test (vitest)
-        run: pnpm test
+        run: bun run test
         working-directory: frontend
 
       - name: Build
-        run: pnpm build
+        run: bun run build
         working-directory: frontend

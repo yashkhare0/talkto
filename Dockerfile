@@ -3,20 +3,17 @@
 # ============================================================
 # Stage 1: Build frontend
 # ============================================================
-FROM node:20-slim AS frontend-builder
+FROM oven/bun:1 AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
 # Install dependencies first (layer caching)
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY frontend/package.json frontend/bun.lock* ./
+RUN bun install --frozen-lockfile
 
 # Build
 COPY frontend/ ./
-RUN pnpm build
+RUN bun run build
 
 
 # ============================================================

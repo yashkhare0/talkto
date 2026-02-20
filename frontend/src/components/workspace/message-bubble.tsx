@@ -20,7 +20,7 @@ interface MessageBubbleProps {
 
 export function MessageBubble({
   message,
-  isOwnMessage: _isOwnMessage,
+  isOwnMessage: _isOwnMessage, // eslint-disable-line @typescript-eslint/no-unused-vars
   showSender,
   onDelete,
 }: MessageBubbleProps) {
