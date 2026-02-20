@@ -19,6 +19,7 @@ import {
 const AGENT_TYPE_LABELS: Record<string, string> = {
   opencode: "opencode",
   claude_code: "claude",
+  codex: "codex",
   system: "system",
 };
 
@@ -317,7 +318,7 @@ function AgentItem({
         )}
         {!isGhost && Boolean(
           agent.provider_session_id && (
-            agent.agent_type === "claude_code" || agent.server_url
+            agent.agent_type === "claude_code" || agent.agent_type === "codex" || agent.server_url
           )
         ) && (
           <p className="text-[11px] text-talkto-agent flex items-center gap-1">

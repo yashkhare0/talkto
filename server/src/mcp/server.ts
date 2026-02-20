@@ -61,6 +61,9 @@ async function discoverOpenCodeServerUrl(sessionId: string): Promise<string | nu
  * 2. If server_url is provided, it's OpenCode (REST model)
  * 3. Try OpenCode auto-discovery on the default port
  * 4. If OpenCode discovery fails, assume Claude Code (subprocess model)
+ *
+ * Codex agents should always pass agent_type="codex" explicitly since
+ * there's no way to auto-detect them from the session ID alone.
  */
 async function detectAgentType(
   sessionId: string,
@@ -69,8 +72,9 @@ async function detectAgentType(
 ): Promise<{ agentType: string; resolvedServerUrl: string | null }> {
   // Explicit type wins
   if (explicitType && explicitType !== "auto") {
-    if (explicitType === "claude_code") {
-      return { agentType: "claude_code", resolvedServerUrl: null };
+    if (explicitType === "claude_code" || explicitType === "codex") {
+      // Subprocess-based agents — no server URL needed
+      return { agentType: explicitType, resolvedServerUrl: null };
     }
     // OpenCode with optional server URL discovery
     const url = serverUrl ?? await discoverOpenCodeServerUrl(sessionId);
@@ -127,14 +131,15 @@ server.tool(
     "this is how TalkTo delivers DMs and @mentions directly into your session. " +
     "Pass your previous agent_name to reconnect as the same identity, " +
     "or omit it to get a new name. " +
-    "Works with both OpenCode and Claude Code agents.",
+    "Works with OpenCode, Claude Code, and Codex CLI agents.",
   {
     session_id: z
       .string()
       .describe(
         "Your session ID (required). TalkTo uses this to deliver messages to you. " +
         "For OpenCode: opencode db \"SELECT id FROM session WHERE parent_id IS NULL ORDER BY time_updated DESC LIMIT 1\" " +
-        "For Claude Code: your conversation/session ID"
+        "For Claude Code: your conversation/session ID " +
+        "For Codex CLI: your thread ID or process ID"
       ),
     project_path: z
       .string()
@@ -146,11 +151,11 @@ server.tool(
     server_url: z
       .string()
       .optional()
-      .describe("URL of your OpenCode API server (auto-discovered if omitted, not needed for Claude Code)"),
+      .describe("URL of your OpenCode API server (auto-discovered if omitted, not needed for Claude Code or Codex)"),
     agent_type: z
       .string()
       .optional()
-      .describe("Agent provider: 'opencode' or 'claude_code' (auto-detected if omitted)"),
+      .describe("Agent provider: 'opencode', 'claude_code', or 'codex' (auto-detected if omitted)"),
   },
   async (args, extra) => {
     if (!args.session_id || !args.session_id.trim()) {
@@ -162,7 +167,8 @@ server.tool(
               error:
                 "session_id is required — it's your login to TalkTo. " +
                 "For OpenCode: opencode db \"SELECT id FROM session WHERE parent_id IS NULL ORDER BY time_updated DESC LIMIT 1\" " +
-                "For Claude Code: pass your conversation/session ID.",
+                "For Claude Code: pass your conversation/session ID. " +
+                "For Codex CLI: pass your thread ID or process ID.",
             }),
           },
         ],

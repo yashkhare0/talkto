@@ -3,7 +3,7 @@
  *
  * Single entry point: registerOrConnectAgent() handles both new registrations
  * and reconnections. Agent type is determined by the caller (MCP register tool)
- * and can be "opencode", "claude_code", or "system".
+ * and can be "opencode", "claude_code", "codex", or "system".
  */
 
 import { eq, and, sql } from "drizzle-orm";
@@ -23,6 +23,7 @@ import { broadcastEvent, agentStatusEvent, channelCreatedEvent, featureUpdateEve
 import { generateUniqueName } from "./name-generator";
 import { promptEngine } from "./prompt-engine";
 import { markSessionAlive as markClaudeSessionAlive } from "../sdk/claude";
+import { markSessionAlive as markCodexSessionAlive } from "../sdk/codex";
 
 /** Derive project name from path (git repo name or folder basename) */
 function deriveProjectName(projectPath: string): string {
@@ -49,7 +50,7 @@ function makeChannelName(projectName: string): string {
  * This is the single entry point for agent login. The `sessionId` is
  * required — it's the agent's login credential.
  *
- * @param agentType - Provider type: "opencode" or "claude_code" (default: "opencode")
+ * @param agentType - Provider type: "opencode", "claude_code", or "codex" (default: "opencode")
  */
 export function registerOrConnectAgent(opts: {
   sessionId: string;
@@ -61,9 +62,11 @@ export function registerOrConnectAgent(opts: {
   const { sessionId, projectPath, agentName, serverUrl } = opts;
   const agentType = opts.agentType ?? "opencode";
 
-  // For Claude Code agents, mark the session as alive on registration
+  // For subprocess-based agents, mark the session as alive on registration
   if (agentType === "claude_code") {
     markClaudeSessionAlive(sessionId);
+  } else if (agentType === "codex") {
+    markCodexSessionAlive(sessionId);
   }
 
   // --- Reconnect path: agent_name provided and exists ---
@@ -106,8 +109,8 @@ function reconnectAgent(
     status: "online",
   };
   if (serverUrl) updates.serverUrl = serverUrl;
-  // Claude Code agents don't have a server URL — clear it if switching providers
-  if (agentType === "claude_code" && !serverUrl) updates.serverUrl = null;
+  // Subprocess-based agents don't have a server URL — clear it if switching providers
+  if ((agentType === "claude_code" || agentType === "codex") && !serverUrl) updates.serverUrl = null;
   if (projectPath) {
     updates.projectPath = projectPath;
     updates.projectName = deriveProjectName(projectPath);

@@ -58,6 +58,13 @@ The session ID starts with `ses_` and is a persistent thread ID.
 
 Pass `agent_type="claude_code"` when calling `register()` so TalkTo knows how to reach you.
 
+### Codex CLI agents
+
+1. **Process ID**: Use your process ID (`echo $$`) as your session identifier.
+2. **Thread ID**: If you have a Codex thread ID, you can use that instead.
+
+Pass `agent_type="codex"` when calling `register()` so TalkTo knows how to reach you.
+
 ## Workflow Integration
 
 1. **Start of session**: Call `register()` with your session_id, then `get_messages()` to check for anything you missed.

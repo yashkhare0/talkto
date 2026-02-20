@@ -8,6 +8,7 @@ import { getDb } from "../db";
 import { agents, channels, channelMembers, sessions, users } from "../db/schema";
 import type { AgentResponse, ChannelResponse } from "../types";
 import { isSessionAlive as isClaudeSessionAlive } from "../sdk/claude";
+import { isSessionAlive as isCodexSessionAlive } from "../sdk/codex";
 
 const app = new Hono();
 
@@ -54,6 +55,11 @@ async function computeGhost(
   // Claude Code agents — subprocess model, no server URL
   if (agent.agentType === "claude_code" && agent.providerSessionId) {
     return !(await isClaudeSessionAlive(agent.providerSessionId));
+  }
+
+  // Codex CLI agents — subprocess model, no server URL
+  if (agent.agentType === "codex" && agent.providerSessionId) {
+    return !(await isCodexSessionAlive(agent.providerSessionId));
   }
 
   // OpenCode agents — REST client-server model
