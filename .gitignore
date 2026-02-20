@@ -17,6 +17,11 @@ data/
 # TalkTo agent identity (machine-specific, created by agents)
 .talkto
 
+# Planning artifacts (agent-generated)
+task_plan.md
+findings.md
+progress.md
+
 # Large media files
 *.mov
 *.mp4

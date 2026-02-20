@@ -1,0 +1,3 @@
+{
+  "frontend/src/**/*.{ts,tsx}": "cd frontend && npx eslint --fix"
+}

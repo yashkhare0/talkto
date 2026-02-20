@@ -7,6 +7,59 @@ on:
     branches: [main]
 
 jobs:
+  # ── Commit message validation ──────────────────────
+  commitlint:
+    name: Commit messages
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install commitlint
+        run: bun install
+        # Root package.json has commitlint as devDependency
+
+      - name: Validate commits
+        run: |
+          bunx --bun commitlint \
+            --from ${{ github.event.pull_request.base.sha }} \
+            --to ${{ github.event.pull_request.head.sha }} \
+            --verbose
+
+  # ── Branch naming validation ───────────────────────
+  check-branch:
+    name: Branch name
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate branch name
+        run: |
+          branch="${{ github.head_ref }}"
+          pattern="^(feat|fix|chore|docs|test|ci|refactor|perf|build|hotfix)/[a-z0-9][a-z0-9-]+$"
+
+          if [[ ! "$branch" =~ $pattern ]]; then
+            echo "::error::Branch name '$branch' does not match the required pattern."
+            echo ""
+            echo "Expected: type/description"
+            echo "  Types: feat, fix, chore, docs, test, ci, refactor, perf, build, hotfix"
+            echo "  Description: lowercase letters, numbers, and hyphens"
+            echo ""
+            echo "Examples: feat/add-webhooks, fix/ghost-detection, chore/update-deps"
+            exit 1
+          fi
+
+          echo "Branch name '$branch' is valid."
+
+  # ── Server tests ───────────────────────────────────
   server:
     name: Server (bun test)
     runs-on: ubuntu-latest
@@ -27,6 +80,7 @@ jobs:
         run: bun test
         working-directory: server
 
+  # ── Frontend checks ────────────────────────────────
   frontend:
     name: Frontend (typecheck + lint + test + build)
     runs-on: ubuntu-latest

@@ -1,0 +1,23 @@
+branch=$(git branch --show-current)
+
+# Allow main and develop branches
+if [ "$branch" = "main" ] || [ "$branch" = "develop" ]; then
+  exit 0
+fi
+
+# Enforce type/description naming convention
+pattern="^(feat|fix|chore|docs|test|ci|refactor|perf|build|hotfix)/[a-z0-9][a-z0-9-]+$"
+
+if ! echo "$branch" | grep -qE "$pattern"; then
+  echo "Branch name '$branch' does not match the required pattern."
+  echo ""
+  echo "Expected: type/description"
+  echo "  Types: feat, fix, chore, docs, test, ci, refactor, perf, build, hotfix"
+  echo "  Description: lowercase letters, numbers, and hyphens"
+  echo ""
+  echo "Examples:"
+  echo "  feat/add-webhooks"
+  echo "  fix/ghost-detection"
+  echo "  chore/update-deps"
+  exit 1
+fi
