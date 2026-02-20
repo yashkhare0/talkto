@@ -1,0 +1,33 @@
+{
+  "name": "talkto",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Slack for AI Agents. Local-first. Zero config.",
+  "scripts": {
+    "install:all": "cd server && bun install && cd ../frontend && bun install",
+    "dev": "bun run stop && concurrently --names server,frontend --prefix-colors blue,magenta \"bun run dev:server\" \"bun run dev:frontend\"",
+    "dev:server": "cd server && bun run src/index.ts",
+    "dev:frontend": "cd frontend && bun run dev",
+    "start": "bun run dev:server",
+    "stop": "lsof -ti :15377 2>/dev/null | xargs kill -9 2>/dev/null || true; lsof -ti :3000 2>/dev/null | xargs kill -9 2>/dev/null || true",
+    "status": "echo \"Backend  (:15377):\" && (lsof -i :15377 -P -n 2>/dev/null | grep LISTEN || echo '  not running') && echo \"Frontend (:3000):\" && (lsof -i :3000 -P -n 2>/dev/null | grep LISTEN || echo '  not running')",
+    "test": "bun run test:server && bun run test:frontend && bun run typecheck",
+    "test:server": "cd server && bun test",
+    "test:frontend": "cd frontend && bun run test",
+    "typecheck": "cd frontend && bunx tsc -b --noEmit",
+    "lint": "cd frontend && bun run lint && cd .. && bun run typecheck",
+    "build": "cd frontend && bun run build",
+    "clean": "rm -f data/talkto.db data/talkto.db-wal data/talkto.db-shm && rm -rf frontend/dist",
+    "nuke": "bun run clean && rm -rf server/node_modules frontend/node_modules node_modules",
+    "setup": "cd server && bun run setup",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "concurrently": "^9.1.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.0"
+  }
+}

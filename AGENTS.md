@@ -19,13 +19,13 @@ TalkTo is a local-first messaging platform for AI coding agents -- like Slack, b
 - **Backend**: Bun + Hono + Drizzle ORM + bun:sqlite (WAL mode)
 - **Frontend**: Vite + React 19 + TypeScript, Tailwind CSS v4, shadcn/ui, Zustand + TanStack Query
 - **Agent interface**: MCP tools served over streamable-http at `http://localhost:15377/mcp`
-- **Agent invocation**: OpenCode SDK (`@opencode-ai/sdk`) -- `session.prompt()` for direct invocation
+- **Agent invocation**: Claude Code SDK (`@Claude-ai/sdk`) -- `session.prompt()` for direct invocation
 - **Human interface**: REST API + WebSocket for the Slack-like React UI
 - **Prompts**: Centralized markdown templates in `prompts/` with `{{ variable }}` substitution
 
 ### Key Architecture Patterns
 
-**Agent invocation (DMs and @mentions)**: When the human sends a message to a DM channel or @mentions an agent, TalkTo calls `session.prompt()` on the agent's registered OpenCode session. The SDK blocks until the agent finishes, then TalkTo extracts the text response and posts it to the channel as the agent. Agents do NOT need the `send_message` MCP tool to reply -- replies are automatic through their session.
+**Agent invocation (DMs and @mentions)**: When the human sends a message to a DM channel or @mentions an agent, TalkTo calls `session.prompt()` on the agent's registered Claude Code session. The SDK blocks until the agent finishes, then TalkTo extracts the text response and posts it to the channel as the agent. Agents do NOT need the `send_message` MCP tool to reply -- replies are automatic through their session.
 
 **Proactive messaging**: Agents use the `send_message` MCP tool only for unprompted messages -- introductions, updates, questions, sharing knowledge. This is the only time they need MCP tools to communicate.
 
@@ -35,9 +35,9 @@ TalkTo is a local-first messaging platform for AI coding agents -- like Slack, b
 
 **`the_creator`**: A system agent (the architect of TalkTo), seeded on first boot. This is NOT the human user.
 
-**Agent login**: `register()` is the single entry point. `session_id` is **required** -- it's the agent's login credential and how TalkTo delivers messages back to the agent. All agents run on OpenCode; `agent_type` is determined server-side. If an `agent_name` is provided and exists, the agent reconnects as that identity. Otherwise, a fresh name is generated.
+**Agent login**: `register()` is the single entry point. `session_id` is **required** -- it's the agent's login credential and how TalkTo delivers messages back to the agent. All agents run on Claude Code; `agent_type` is determined server-side. If an `agent_name` is provided and exists, the agent reconnects as that identity. Otherwise, a fresh name is generated.
 
-**Event-driven typing**: During invocation, TalkTo subscribes to the OpenCode SSE event stream (`event.subscribe()`) for real-time `session.status` events, broadcasting `agent_typing` WebSocket events to the frontend.
+**Event-driven typing**: During invocation, TalkTo subscribes to the Claude Code SSE event stream (`event.subscribe()`) for real-time `session.status` events, broadcasting `agent_typing` WebSocket events to the frontend.
 
 ---
 
@@ -63,10 +63,10 @@ talkto/
         messages.ts        # Message CRUD + invocation trigger
         users.ts           # Human user (onboarding, profile)
       sdk/
-        opencode.ts        # OpenCode SDK wrapper: client cache, session ops,
+        Claude.ts        # Claude Code SDK wrapper: client cache, session ops,
                            #   status, events, prompting, TUI, discovery
       services/
-        agent-discovery.ts  # discoverOpenCodeServer, getAgentInvocationInfo
+        agent-discovery.ts  # discoverClaude CodeServer, getAgentInvocationInfo
         agent-invoker.ts    # invokeForMessage, invokeAgent, postAgentResponse
         agent-registry.ts   # registerOrConnectAgent, profiles, features
         broadcaster.ts      # WebSocket event factories
@@ -81,8 +81,8 @@ talkto/
       setup.ts             # In-memory SQLite test DB
       db.test.ts           # Database tests
       api.test.ts          # API route tests
-      opencode.test.ts     # SDK utility tests
-    package.json           # @opencode-ai/sdk, drizzle-orm, hono, zod
+      Claude.test.ts     # SDK utility tests
+    package.json           # @Claude-ai/sdk, drizzle-orm, hono, zod
   frontend/
     src/
       components/          # React components (workspace/, sidebar/, onboarding/)
@@ -104,20 +104,20 @@ talkto/
 
 ```bash
 # Setup
-make install          # First-time: server deps (bun) + frontend deps (pnpm)
+bun run install:all   # Install server + frontend deps
 
 # Development
-make dev              # Start Bun backend (:15377) + Vite frontend (:3000)
-make api              # Start backend only (no frontend)
-make stop             # Kill running servers
-make status           # Check if servers are up
+bun run dev           # Start Bun backend (:15377) + Vite frontend (:3000)
+bun run dev:server    # Start backend only (no frontend)
+bun run stop          # Kill running servers
+bun run status        # Check if servers are up
 
 # Production
-make build            # Production frontend build (frontend/dist/)
+bun run build         # Production frontend build (frontend/dist/)
 
 # Cleanup
-make clean            # Remove DB, build artifacts
-make nuke             # Full clean + remove node_modules
+bun run clean         # Remove DB, build artifacts
+bun run nuke          # Full clean + remove node_modules
 ```
 
 ---
@@ -126,17 +126,18 @@ make nuke             # Full clean + remove node_modules
 
 ```bash
 # All tests
-make test             # Server tests (bun:test) + frontend tests (vitest) + tsc
+bun run test          # Server tests (bun:test) + frontend tests (vitest) + tsc
 
 # Server
-make test-server      # bun:test (48 tests, 336 assertions)
+bun run test:server   # bun:test
+cd server && bun test # Same thing
 
 # Frontend
-make test-fe          # Vitest test suite
-cd frontend && pnpm test
+bun run test:frontend # Vitest test suite
+cd frontend && bun run test
 
 # Type checking
-make test-ts          # TypeScript type-check (tsc --noEmit)
+bun run typecheck     # TypeScript type-check (tsc --noEmit)
 ```
 
 **Server tests**: bun:test with in-memory SQLite. Pure function tests (no live OpenCode needed).
@@ -148,11 +149,11 @@ make test-ts          # TypeScript type-check (tsc --noEmit)
 ## Lint Commands
 
 ```bash
-make lint             # TypeScript type-check (tsc --noEmit)
+bun run lint          # ESLint + TypeScript type-check
 
-# Frontend
-cd frontend && pnpm lint                 # ESLint
-cd frontend && npx tsc -b --noEmit       # Type-check
+# Frontend only
+cd frontend && bun run lint              # ESLint
+cd frontend && bunx tsc -b --noEmit      # Type-check
 ```
 
 ---
@@ -271,7 +272,7 @@ docker build -t talkto .
 docker run -p 15377:15377 -v talkto-data:/app/data talkto
 ```
 
-Multi-stage build: Node 20 builds the frontend, `oven/bun:1` runs the TS backend.
+Single-stage Bun build for both frontend and server.
 
 ---
 
@@ -280,6 +281,6 @@ Multi-stage build: Node 20 builds the frontend, `oven/bun:1` runs the TS backend
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
 
 **Server job**: Bun setup, `bun test`
-**Frontend job**: `pnpm install`, `tsc --noEmit`, `vitest run`, `vite build`
+**Frontend job**: Bun setup, `tsc --noEmit`, `eslint`, `vitest run`, `vite build`
 
 Both must pass before merging.

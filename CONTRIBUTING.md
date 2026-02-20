@@ -9,16 +9,15 @@ Thanks for your interest in contributing. This guide covers setup, conventions, 
 ### Requirements
 
 - macOS or Linux
-- [Bun](https://bun.sh/) (runtime for TS backend)
-- Node.js 20+ with [pnpm](https://pnpm.io/) (for frontend)
+- [Bun](https://bun.sh/) (runtime for both backend and frontend)
 
 ### Setup
 
 ```bash
 git clone https://github.com/hyperslack/talkto.git
 cd talkto
-make install   # Installs server (bun) + frontend (pnpm) deps
-make dev       # Starts Bun backend (:15377) + Vite frontend (:3000)
+bun run install:all   # Installs server + frontend deps
+bun run dev           # Starts Bun backend (:15377) + Vite frontend (:3000)
 ```
 
 The backend serves REST, WebSocket, and MCP from a single process. The frontend proxies API calls to `:15377`.
@@ -39,7 +38,7 @@ talkto/
 │   │   ├── sdk/opencode.ts    # OpenCode SDK wrapper (clients, sessions, events)
 │   │   ├── services/          # Business logic (invoker, registry, broadcaster, etc.)
 │   │   └── types/index.ts     # Zod schemas + TypeScript interfaces
-│   ├── tests/                 # bun:test suite (48 tests)
+│   ├── tests/                 # bun:test suite
 │   └── package.json           # Dependencies
 ├── frontend/                  # React frontend
 │   └── src/
@@ -52,19 +51,19 @@ talkto/
 │   ├── master_prompt.md       # Full agent system prompt
 │   ├── registration_rules.md  # Per-session rules
 │   └── blocks/                # Composable prompt fragments
-├── Dockerfile                 # Multi-stage: Node builds frontend, Bun runs server
+├── Dockerfile                 # Multi-stage Bun build (frontend + server)
 ├── docker-compose.yml         # Single service + named volume
-└── Makefile                   # Developer commands
+└── package.json               # Root orchestration scripts
 ```
 
 ---
 
 ## Testing
 
-### Server (48 tests)
+### Server
 
 ```bash
-make test-server               # Run all server tests
+bun run test:server            # Run all server tests
 cd server && bun test          # Same thing
 ```
 
@@ -73,9 +72,8 @@ Tests use bun:test with in-memory SQLite. Pure function and API tests that don't
 ### Frontend
 
 ```bash
-make test-fe                   # Run all frontend tests
-cd frontend && pnpm test       # Same thing
-cd frontend && pnpm test:watch # Watch mode
+bun run test:frontend          # Run all frontend tests
+cd frontend && bun run test    # Same thing
 ```
 
 Tests use vitest + jsdom + @testing-library/react. **Do not write tests for shadcn/ui components** (`src/components/ui/`) -- test only application code.
@@ -83,7 +81,7 @@ Tests use vitest + jsdom + @testing-library/react. **Do not write tests for shad
 ### Full Suite
 
 ```bash
-make test    # Server tests + frontend tests + TypeScript type-check
+bun run test    # Server tests + frontend tests + TypeScript type-check
 ```
 
 ---
@@ -151,14 +149,15 @@ On agent list requests, TalkTo checks each agent's registered session via `sessi
 
 ## Commit Style
 
-Keep commits small and focused. Each commit should leave the test suite passing.
+We use [Conventional Commits](https://www.conventionalcommits.org/). Commit messages are enforced by commitlint via a git hook.
 
-Common prefixes:
-- `feat:` -- New features
-- `fix:` -- Bug fixes
-- `test:` -- Test additions/changes
-- `ci:` -- CI/CD changes
-- `docs:` -- Documentation
+```
+type: description
+```
+
+Allowed types: `feat`, `fix`, `chore`, `docs`, `test`, `ci`, `refactor`, `style`, `perf`, `build`, `revert`.
+
+Keep commits small and focused. Each commit should leave the test suite passing.
 
 ---
 

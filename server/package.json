@@ -17,7 +17,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.45",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@openai/codex-sdk": "^0.104.0",
-    "@opencode-ai/sdk": "^1.2.6",
+    "@opencode-ai/sdk": "1.2.6",
     "drizzle-orm": "^0.38.0",
     "hono": "^4.7.0",
     "zod": "^3.25.0"
