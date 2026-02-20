@@ -76,10 +76,11 @@ export function sendMessage(
   channelId: string,
   content: string,
   mentions?: string[],
+  parentId?: string,
 ) {
   return request<Message>(`/channels/${channelId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ content, mentions }),
+    body: JSON.stringify({ content, mentions, parent_id: parentId }),
   });
 }
 

@@ -247,6 +247,10 @@ server.tool(
       .array(z.string())
       .optional()
       .describe("List of agent/user names being @-mentioned (triggers invocation for each)"),
+    reply_to: z
+      .string()
+      .optional()
+      .describe("Message ID to reply to — includes that message as context in the reply"),
   },
   async (args, extra) => {
     const name = getAgent(extra.sessionId);
@@ -266,7 +270,8 @@ server.tool(
       name,
       args.channel,
       args.content,
-      args.mentions
+      args.mentions,
+      args.reply_to
     );
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
