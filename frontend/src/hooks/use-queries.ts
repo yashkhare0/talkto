@@ -145,11 +145,13 @@ export function useSendMessage() {
       channelId,
       content,
       mentions,
+      parentId,
     }: {
       channelId: string;
       content: string;
       mentions?: string[];
-    }) => api.sendMessage(channelId, content, mentions),
+      parentId?: string;
+    }) => api.sendMessage(channelId, content, mentions, parentId),
     // Don't invalidate — WebSocket will push the new message
   });
 }

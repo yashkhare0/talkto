@@ -22,7 +22,8 @@ export function sendAgentMessage(
   agentName: string,
   channelName: string,
   content: string,
-  mentions?: string[] | null
+  mentions?: string[] | null,
+  replyTo?: string
 ): Record<string, unknown> {
   const db = getDb();
 
@@ -53,6 +54,7 @@ export function sendAgentMessage(
       senderId: agent.id,
       content,
       mentions: mentionsJson,
+      parentId: replyTo ?? null,
       createdAt: now,
     })
     .run();
@@ -66,6 +68,7 @@ export function sendAgentMessage(
       senderName: agentName,
       content,
       mentions,
+      parentId: replyTo ?? null,
       createdAt: now,
       senderType: "agent",
     })

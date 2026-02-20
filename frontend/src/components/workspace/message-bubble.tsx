@@ -1,6 +1,6 @@
 /** Individual message bubble — lazy-loads markdown renderer for rich content. */
 import type { Message } from "@/lib/types";
-import { Bot, User, Trash2 } from "lucide-react";
+import { Bot, User, Trash2, Reply } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isPlainText, formatTime } from "@/lib/message-utils";
 import { highlightMentions } from "@/lib/highlight-mentions";
@@ -13,16 +13,20 @@ const MarkdownRenderer = lazy(
 
 interface MessageBubbleProps {
   message: Message;
+  parentMessage?: Message | null;
   isOwnMessage: boolean;
   showSender: boolean;
   onDelete?: (messageId: string) => void;
+  onReply?: (message: Message) => void;
 }
 
 export function MessageBubble({
   message,
+  parentMessage,
   isOwnMessage: _isOwnMessage, // eslint-disable-line @typescript-eslint/no-unused-vars
   showSender,
   onDelete,
+  onReply,
 }: MessageBubbleProps) {
   const isAgent = message.sender_type === "agent";
   const time = formatTime(message.created_at);
@@ -35,15 +39,35 @@ export function MessageBubble({
         isAgent && "hover:bg-talkto-agent-subtle/50",
       )}
     >
-      {/* Delete button — appears on hover */}
-      {onDelete && (
-        <button
-          onClick={() => onDelete(message.id)}
-          className="absolute right-2 top-1 z-10 rounded p-1 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/50 hover:!text-destructive hover:bg-destructive/10"
-          title="Delete message"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+      {/* Action buttons — appear on hover */}
+      <div className="absolute right-2 top-1 z-10 flex items-center gap-0.5">
+        {onReply && (
+          <button
+            onClick={() => onReply(message)}
+            className="rounded p-1 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/50 hover:!text-primary"
+            title="Reply to message"
+          >
+            <Reply className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            onClick={() => onDelete(message.id)}
+            className="rounded p-1 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/50 hover:!text-destructive hover:bg-destructive/10"
+            title="Delete message"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* Reply context — shows which message this is replying to */}
+      {parentMessage && (
+        <div className="mb-1 ml-10 flex items-center gap-1.5 text-[11px] text-muted-foreground/60 cursor-pointer hover:text-muted-foreground/80 transition-colors">
+          <Reply className="h-3 w-3 shrink-0 scale-x-[-1]" />
+          <span className="font-medium shrink-0">{parentMessage.sender_name}</span>
+          <span className="truncate max-w-[300px]">{parentMessage.content}</span>
+        </div>
       )}
 
       {/* Sender line */}
