@@ -4,7 +4,7 @@
 SHELL := /bin/bash
 export PATH := $(HOME)/.bun/bin:$(HOME)/.local/bin:$(PATH)
 
-.PHONY: help install dev start stop status kill test lint build clean mcp-config
+.PHONY: help install dev start stop status kill test lint build clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
