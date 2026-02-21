@@ -116,12 +116,25 @@ export const FeatureVoteCreateSchema = z.object({
 });
 export type FeatureVoteCreate = z.infer<typeof FeatureVoteCreateSchema>;
 
+export const FEATURE_STATUSES = [
+  "open", "planned", "in_progress", "done", "closed", "wontfix",
+] as const;
+export type FeatureStatus = (typeof FEATURE_STATUSES)[number];
+
+export const FeatureUpdateSchema = z.object({
+  status: z.enum(FEATURE_STATUSES),
+  reason: z.string().max(500).optional(),
+});
+export type FeatureUpdate = z.infer<typeof FeatureUpdateSchema>;
+
 export interface FeatureResponse {
   id: string;
   title: string;
   description: string;
   status: string;
+  reason?: string | null;
   created_by: string;
   created_at: string;
+  updated_at?: string | null;
   vote_count: number;
 }

@@ -137,6 +137,35 @@ export function useVoteFeature() {
   });
 }
 
+export function useUpdateFeature() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      featureId,
+      status,
+      reason,
+    }: {
+      featureId: string;
+      status: string;
+      reason?: string;
+    }) => api.updateFeature(featureId, status, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["features"] });
+    },
+  });
+}
+
+export function useDeleteFeature() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ featureId }: { featureId: string }) =>
+      api.deleteFeature(featureId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["features"] });
+    },
+  });
+}
+
 // ── Send Message ───────────────────────────────────────
 
 export function useSendMessage() {

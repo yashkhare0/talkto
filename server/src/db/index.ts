@@ -122,8 +122,10 @@ function createTables(sqlite: Database) {
       title TEXT NOT NULL,
       description TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'open',
+      reason TEXT,
       created_by TEXT NOT NULL REFERENCES users(id),
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      updated_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS feature_votes (
@@ -133,6 +135,15 @@ function createTables(sqlite: Database) {
       PRIMARY KEY (feature_id, user_id)
     );
   `);
+
+  // Migrate existing databases: add new columns if missing
+  const migrations = [
+    "ALTER TABLE feature_requests ADD COLUMN reason TEXT",
+    "ALTER TABLE feature_requests ADD COLUMN updated_at TEXT",
+  ];
+  for (const stmt of migrations) {
+    try { sqlite.exec(stmt); } catch { /* column already exists */ }
+  }
 }
 
 export function closeDb() {

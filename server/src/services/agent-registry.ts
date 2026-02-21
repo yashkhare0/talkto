@@ -512,6 +512,73 @@ export function agentCreateFeature(
   };
 }
 
+/** Update a feature request's status (resolve, cancel, etc.) as an agent */
+export function agentUpdateFeatureStatus(
+  agentName: string,
+  featureId: string,
+  status: string,
+  reason?: string
+): Record<string, unknown> {
+  const db = getDb();
+  const agent = db.select().from(agents).where(eq(agents.agentName, agentName)).get();
+  if (!agent) return { error: `Agent '${agentName}' not found.` };
+
+  const feature = db.select().from(featureRequests).where(eq(featureRequests.id, featureId)).get();
+  if (!feature) return { error: `Feature '${featureId}' not found.` };
+
+  const now = new Date().toISOString();
+  db.update(featureRequests)
+    .set({ status, reason: reason ?? null, updatedAt: now })
+    .where(eq(featureRequests.id, featureId))
+    .run();
+
+  const countRow = db
+    .select({ total: sql<number>`coalesce(sum(${featureVotes.vote}), 0)` })
+    .from(featureVotes)
+    .where(eq(featureVotes.featureId, featureId))
+    .get();
+  const voteCount = Number(countRow?.total ?? 0);
+
+  broadcastEvent(
+    featureUpdateEvent({
+      featureId,
+      title: feature.title,
+      status,
+      voteCount,
+      updateType: "status_changed",
+    })
+  );
+
+  return { status: "updated", feature_id: featureId, new_status: status, reason: reason ?? null };
+}
+
+/** Delete a feature request as an agent */
+export function agentDeleteFeature(
+  agentName: string,
+  featureId: string
+): Record<string, unknown> {
+  const db = getDb();
+  const agent = db.select().from(agents).where(eq(agents.agentName, agentName)).get();
+  if (!agent) return { error: `Agent '${agentName}' not found.` };
+
+  const feature = db.select().from(featureRequests).where(eq(featureRequests.id, featureId)).get();
+  if (!feature) return { error: `Feature '${featureId}' not found.` };
+
+  db.delete(featureVotes).where(eq(featureVotes.featureId, featureId)).run();
+  db.delete(featureRequests).where(eq(featureRequests.id, featureId)).run();
+
+  broadcastEvent(
+    featureUpdateEvent({
+      featureId,
+      title: feature.title,
+      status: "deleted",
+      updateType: "deleted",
+    })
+  );
+
+  return { status: "deleted", feature_id: featureId, title: feature.title };
+}
+
 /** List all feature requests with vote counts */
 export function listAllFeatures(): Array<Record<string, unknown>> {
   const db = getDb();
@@ -521,8 +588,10 @@ export function listAllFeatures(): Array<Record<string, unknown>> {
       title: featureRequests.title,
       description: featureRequests.description,
       status: featureRequests.status,
+      reason: featureRequests.reason,
       createdBy: featureRequests.createdBy,
       createdAt: featureRequests.createdAt,
+      updatedAt: featureRequests.updatedAt,
       voteCount: sql<number>`coalesce(sum(${featureVotes.vote}), 0)`,
     })
     .from(featureRequests)
@@ -536,8 +605,10 @@ export function listAllFeatures(): Array<Record<string, unknown>> {
     title: r.title,
     description: r.description,
     status: r.status,
+    reason: r.reason,
     created_by: r.createdBy,
     created_at: r.createdAt,
+    updated_at: r.updatedAt,
     vote_count: Number(r.voteCount),
   }));
 }

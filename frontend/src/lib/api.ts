@@ -142,3 +142,16 @@ export function voteFeature(featureId: string, vote: 1 | -1) {
     { method: "POST", body: JSON.stringify({ vote }) },
   );
 }
+
+export function updateFeature(featureId: string, status: string, reason?: string) {
+  return request<Feature>(`/features/${featureId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, reason }),
+  });
+}
+
+export function deleteFeature(featureId: string) {
+  return request<{ deleted: boolean; id: string }>(`/features/${featureId}`, {
+    method: "DELETE",
+  });
+}

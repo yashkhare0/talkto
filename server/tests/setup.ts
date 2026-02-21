@@ -83,8 +83,10 @@ export function createTestDb(): TestDb {
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'open',
+    reason TEXT,
     created_by TEXT NOT NULL REFERENCES users(id),
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    updated_at TEXT
   )`);
 
   db.run(sql`CREATE TABLE IF NOT EXISTS feature_votes (

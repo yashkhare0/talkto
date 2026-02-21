@@ -237,4 +237,43 @@ describe("feature endpoints", () => {
       }),
     );
   });
+
+  it("updateFeature sends PATCH with status and reason", async () => {
+    mockFetch.mockResolvedValue(mockResponse({ id: "f1", status: "done" }));
+
+    await api.updateFeature("f1", "done", "Shipped in v0.2");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/features/f1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ status: "done", reason: "Shipped in v0.2" }),
+      }),
+    );
+  });
+
+  it("updateFeature sends PATCH without reason", async () => {
+    mockFetch.mockResolvedValue(mockResponse({ id: "f1", status: "planned" }));
+
+    await api.updateFeature("f1", "planned");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/features/f1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ status: "planned" }),
+      }),
+    );
+  });
+
+  it("deleteFeature sends DELETE", async () => {
+    mockFetch.mockResolvedValue(mockResponse({ deleted: true, id: "f1" }));
+
+    await api.deleteFeature("f1");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/features/f1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
 });

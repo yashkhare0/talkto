@@ -197,10 +197,12 @@ export const featureRequests = sqliteTable("feature_requests", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   status: text("status").notNull().default("open"), // open|planned|in_progress|done|closed|wontfix
+  reason: text("reason"), // explanation for closing/resolving (nullable)
   createdBy: text("created_by")
     .notNull()
     .references(() => users.id),
   createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at"), // when status last changed (nullable)
 });
 
 export const featureRequestsRelations = relations(

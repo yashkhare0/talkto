@@ -1,9 +1,11 @@
-/** Feature requests panel — right-side Sheet overlay. */
-import { useState } from "react";
+/** Feature requests panel — right-side Sheet overlay with management actions. */
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   useFeatures,
   useCreateFeature,
   useVoteFeature,
+  useUpdateFeature,
+  useDeleteFeature,
 } from "@/hooks/use-queries";
 import {
   Sheet,
@@ -19,9 +21,34 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronUp, ChevronDown, Plus, Lightbulb } from "lucide-react";
+import {
+  ChevronUp,
+  ChevronDown,
+  Plus,
+  Lightbulb,
+  MoreVertical,
+  Check,
+  X,
+  Ban,
+  Trash2,
+  Clock,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Feature } from "@/lib/types";
+
+// ── Status config ───────────────────────────────────────
+
+const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
+  open: { color: "bg-talkto-success/10 text-talkto-success", label: "open" },
+  planned: { color: "bg-blue-500/10 text-blue-500", label: "planned" },
+  in_progress: { color: "bg-amber-500/10 text-amber-500", label: "in progress" },
+  done: { color: "bg-muted text-muted-foreground", label: "done" },
+  closed: { color: "bg-muted text-muted-foreground/60", label: "closed" },
+  wontfix: { color: "bg-red-500/8 text-red-400", label: "won't fix" },
+};
+
+// ── Panel ───────────────────────────────────────────────
 
 interface FeaturePanelProps {
   open: boolean;
@@ -110,6 +137,8 @@ export function FeaturePanel({ open, onOpenChange }: FeaturePanelProps) {
   );
 }
 
+// ── Create form ─────────────────────────────────────────
+
 function CreateFeatureForm({ onDone }: { onDone: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -171,18 +200,69 @@ function CreateFeatureForm({ onDone }: { onDone: () => void }) {
   );
 }
 
+// ── Feature item ────────────────────────────────────────
+
 function FeatureItem({ feature }: { feature: Feature }) {
   const voteFeature = useVoteFeature();
+  const updateFeature = useUpdateFeature();
+  const deleteFeature = useDeleteFeature();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [reasonPrompt, setReasonPrompt] = useState<string | null>(null); // status waiting for reason
+  const [reasonText, setReasonText] = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const statusColor: Record<string, string> = {
-    open: "bg-talkto-success/10 text-talkto-success",
-    planned: "bg-talkto-planned/10 text-talkto-planned",
-    "in-progress": "bg-talkto-in-progress/10 text-talkto-in-progress",
-    done: "bg-muted text-muted-foreground",
-  };
+  const cfg = STATUS_CONFIG[feature.status] ?? STATUS_CONFIG.open;
+  const isClosed = feature.status === "done" || feature.status === "closed" || feature.status === "wontfix";
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+        setConfirmDelete(false);
+        setReasonPrompt(null);
+        setReasonText("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
+  const handleStatusChange = useCallback(
+    (status: string) => {
+      // For close/wontfix, prompt for reason
+      if (status === "closed" || status === "wontfix") {
+        setReasonPrompt(status);
+        return;
+      }
+      updateFeature.mutate({ featureId: feature.id, status });
+      setMenuOpen(false);
+    },
+    [feature.id, updateFeature],
+  );
+
+  const handleReasonSubmit = useCallback(() => {
+    if (!reasonPrompt) return;
+    updateFeature.mutate({
+      featureId: feature.id,
+      status: reasonPrompt,
+      reason: reasonText.trim() || undefined,
+    });
+    setMenuOpen(false);
+    setReasonPrompt(null);
+    setReasonText("");
+  }, [feature.id, reasonPrompt, reasonText, updateFeature]);
+
+  const handleDelete = useCallback(() => {
+    deleteFeature.mutate({ featureId: feature.id });
+    setMenuOpen(false);
+    setConfirmDelete(false);
+  }, [feature.id, deleteFeature]);
 
   return (
-    <div className="group rounded-md border border-border/30 bg-card/50 p-3 transition-colors hover:border-border/60">
+    <div className="group relative rounded-md border border-border/30 bg-card/50 p-3 transition-colors hover:border-border/60">
       <div className="flex items-start gap-2">
         {/* Vote controls */}
         <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5">
@@ -190,9 +270,8 @@ function FeatureItem({ feature }: { feature: Feature }) {
             variant="ghost"
             size="icon"
             className="h-5 w-5 text-muted-foreground/40 hover:text-foreground"
-            onClick={() =>
-              voteFeature.mutate({ featureId: feature.id, vote: 1 })
-            }
+            onClick={() => voteFeature.mutate({ featureId: feature.id, vote: 1 })}
+            disabled={isClosed}
           >
             <ChevronUp className="h-3.5 w-3.5" />
           </Button>
@@ -212,9 +291,8 @@ function FeatureItem({ feature }: { feature: Feature }) {
             variant="ghost"
             size="icon"
             className="h-5 w-5 text-muted-foreground/40 hover:text-foreground"
-            onClick={() =>
-              voteFeature.mutate({ featureId: feature.id, vote: -1 })
-            }
+            onClick={() => voteFeature.mutate({ featureId: feature.id, vote: -1 })}
+            disabled={isClosed}
           >
             <ChevronDown className="h-3.5 w-3.5" />
           </Button>
@@ -223,24 +301,202 @@ function FeatureItem({ feature }: { feature: Feature }) {
         {/* Content */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-xs font-medium text-foreground">
+            <h3 className={cn(
+              "truncate text-xs font-medium",
+              isClosed ? "text-muted-foreground/60 line-through" : "text-foreground",
+            )}>
               {feature.title}
             </h3>
             <Badge
               variant="secondary"
-              className={cn(
-                "h-4 text-[9px] px-1.5",
-                statusColor[feature.status] ?? "",
-              )}
+              className={cn("h-4 text-[9px] px-1.5 shrink-0", cfg.color)}
             >
-              {feature.status}
+              {cfg.label}
             </Badge>
           </div>
           <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground/70">
             {feature.description}
           </p>
+          {/* Reason display */}
+          {feature.reason && (
+            <p className="mt-1 text-[10px] italic text-muted-foreground/50">
+              Reason: {feature.reason}
+            </p>
+          )}
         </div>
+
+        {/* Action menu trigger */}
+        <button
+          onClick={() => {
+            setMenuOpen((v) => !v);
+            setConfirmDelete(false);
+            setReasonPrompt(null);
+            setReasonText("");
+          }}
+          className="shrink-0 rounded p-0.5 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/50 hover:!text-foreground"
+        >
+          <MoreVertical className="h-3.5 w-3.5" />
+        </button>
       </div>
+
+      {/* Action menu */}
+      {menuOpen && (
+        <div
+          ref={menuRef}
+          className="absolute right-2 top-8 z-50 w-44 rounded-md border border-border bg-popover p-1 shadow-md animate-in fade-in slide-in-from-top-1 duration-100"
+        >
+          {/* Reason prompt mode */}
+          {reasonPrompt && (
+            <div className="space-y-1.5 p-1">
+              <p className="text-[10px] font-medium text-muted-foreground">
+                {reasonPrompt === "wontfix" ? "Won't fix" : "Close"} — reason (optional):
+              </p>
+              <Input
+                value={reasonText}
+                onChange={(e) => setReasonText(e.target.value)}
+                placeholder="Why?"
+                className="h-7 text-xs"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleReasonSubmit();
+                  if (e.key === "Escape") { setReasonPrompt(null); setReasonText(""); }
+                }}
+              />
+              <div className="flex justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[10px] px-2"
+                  onClick={() => { setReasonPrompt(null); setReasonText(""); }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-6 text-[10px] px-2"
+                  onClick={handleReasonSubmit}
+                  disabled={updateFeature.isPending}
+                >
+                  {updateFeature.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Confirm"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Delete confirmation mode */}
+          {!reasonPrompt && confirmDelete && (
+            <div className="space-y-1.5 p-1">
+              <p className="text-[10px] font-medium text-destructive">
+                Delete permanently?
+              </p>
+              <div className="flex justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[10px] px-2"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-6 text-[10px] px-2"
+                  onClick={handleDelete}
+                  disabled={deleteFeature.isPending}
+                >
+                  {deleteFeature.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Delete"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Normal action buttons */}
+          {!reasonPrompt && !confirmDelete && (
+            <>
+              {feature.status !== "done" && (
+                <MenuButton
+                  icon={<Check className="h-3 w-3" />}
+                  label="Resolve"
+                  onClick={() => handleStatusChange("done")}
+                />
+              )}
+              {feature.status !== "planned" && feature.status !== "done" && (
+                <MenuButton
+                  icon={<Clock className="h-3 w-3" />}
+                  label="Mark Planned"
+                  onClick={() => handleStatusChange("planned")}
+                />
+              )}
+              {feature.status !== "in_progress" && feature.status !== "done" && (
+                <MenuButton
+                  icon={<Loader2 className="h-3 w-3" />}
+                  label="Mark In Progress"
+                  onClick={() => handleStatusChange("in_progress")}
+                />
+              )}
+              {feature.status !== "open" && (
+                <MenuButton
+                  icon={<Lightbulb className="h-3 w-3" />}
+                  label="Reopen"
+                  onClick={() => handleStatusChange("open")}
+                />
+              )}
+              {feature.status !== "closed" && (
+                <MenuButton
+                  icon={<X className="h-3 w-3" />}
+                  label="Close"
+                  onClick={() => handleStatusChange("closed")}
+                  className="text-muted-foreground/70"
+                />
+              )}
+              {feature.status !== "wontfix" && (
+                <MenuButton
+                  icon={<Ban className="h-3 w-3" />}
+                  label="Won't Fix"
+                  onClick={() => handleStatusChange("wontfix")}
+                  className="text-muted-foreground/70"
+                />
+              )}
+              <Separator className="my-1 opacity-30" />
+              <MenuButton
+                icon={<Trash2 className="h-3 w-3" />}
+                label="Delete"
+                onClick={() => setConfirmDelete(true)}
+                className="text-destructive hover:!text-destructive"
+              />
+            </>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+// ── Menu button ─────────────────────────────────────────
+
+function MenuButton({
+  icon,
+  label,
+  onClick,
+  className,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-accent",
+        className,
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

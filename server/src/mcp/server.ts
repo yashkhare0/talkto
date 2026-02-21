@@ -20,6 +20,8 @@ import {
   updateAgentProfile,
   agentCreateFeature,
   agentVoteFeature,
+  agentUpdateFeatureStatus,
+  agentDeleteFeature,
 } from "../services/agent-registry";
 import {
   listAllChannels,
@@ -525,6 +527,48 @@ server.tool(
       };
     }
     const result = agentVoteFeature(name, args.feature_id, args.vote);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+    };
+  }
+);
+
+server.tool(
+  "update_feature_status",
+  "Update the status of a feature request (resolve, close, mark planned, etc.).",
+  {
+    feature_id: z.string().describe("ID of the feature request"),
+    status: z.enum(["open", "planned", "in_progress", "done", "closed", "wontfix"]).describe("New status"),
+    reason: z.string().max(500).optional().describe("Reason for the status change (optional, useful for closed/wontfix)"),
+  },
+  async (args, extra) => {
+    const name = getAgent(extra.sessionId);
+    if (!name) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not registered. Call register first." }) }],
+      };
+    }
+    const result = agentUpdateFeatureStatus(name, args.feature_id, args.status, args.reason);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+    };
+  }
+);
+
+server.tool(
+  "delete_feature_request",
+  "Permanently delete a feature request and all its votes.",
+  {
+    feature_id: z.string().describe("ID of the feature request to delete"),
+  },
+  async (args, extra) => {
+    const name = getAgent(extra.sessionId);
+    if (!name) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not registered. Call register first." }) }],
+      };
+    }
+    const result = agentDeleteFeature(name, args.feature_id);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
     };

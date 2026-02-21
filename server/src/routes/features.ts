@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { eq, desc, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { featureRequests, featureVotes, users } from "../db/schema";
-import { FeatureCreateSchema, FeatureVoteCreateSchema } from "../types";
+import { FeatureCreateSchema, FeatureUpdateSchema, FeatureVoteCreateSchema } from "../types";
 import { broadcastEvent, featureUpdateEvent } from "../services/broadcaster";
 import type { FeatureResponse } from "../types";
 
@@ -23,8 +23,10 @@ app.get("/", (c) => {
       title: featureRequests.title,
       description: featureRequests.description,
       status: featureRequests.status,
+      reason: featureRequests.reason,
       createdBy: featureRequests.createdBy,
       createdAt: featureRequests.createdAt,
+      updatedAt: featureRequests.updatedAt,
       voteCount: sql<number>`coalesce(sum(${featureVotes.vote}), 0)`,
     })
     .from(featureRequests)
@@ -43,8 +45,10 @@ app.get("/", (c) => {
     title: r.title,
     description: r.description,
     status: r.status,
+    reason: r.reason,
     created_by: r.createdBy,
     created_at: r.createdAt,
+    updated_at: r.updatedAt,
     vote_count: Number(r.voteCount),
   }));
 
@@ -101,6 +105,96 @@ app.post("/", async (c) => {
     } satisfies FeatureResponse,
     201
   );
+});
+
+// PATCH /features/:featureId — update status (resolve, cancel, etc.)
+app.patch("/:featureId", async (c) => {
+  const featureId = c.req.param("featureId");
+  const body = await c.req.json();
+  const parsed = FeatureUpdateSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ detail: parsed.error.message }, 400);
+  }
+  const db = getDb();
+
+  const feature = db
+    .select()
+    .from(featureRequests)
+    .where(eq(featureRequests.id, featureId))
+    .get();
+  if (!feature) {
+    return c.json({ detail: "Feature not found" }, 404);
+  }
+
+  const now = new Date().toISOString();
+  db.update(featureRequests)
+    .set({
+      status: parsed.data.status,
+      reason: parsed.data.reason ?? null,
+      updatedAt: now,
+    })
+    .where(eq(featureRequests.id, featureId))
+    .run();
+
+  // Get vote count
+  const countRow = db
+    .select({ total: sql<number>`coalesce(sum(${featureVotes.vote}), 0)` })
+    .from(featureVotes)
+    .where(eq(featureVotes.featureId, featureId))
+    .get();
+  const voteCount = Number(countRow?.total ?? 0);
+
+  broadcastEvent(
+    featureUpdateEvent({
+      featureId,
+      title: feature.title,
+      status: parsed.data.status,
+      voteCount,
+      updateType: "status_changed",
+    })
+  );
+
+  return c.json({
+    id: featureId,
+    title: feature.title,
+    description: feature.description,
+    status: parsed.data.status,
+    reason: parsed.data.reason ?? null,
+    created_by: feature.createdBy,
+    created_at: feature.createdAt,
+    updated_at: now,
+    vote_count: voteCount,
+  } satisfies FeatureResponse);
+});
+
+// DELETE /features/:featureId — hard delete feature and its votes
+app.delete("/:featureId", async (c) => {
+  const featureId = c.req.param("featureId");
+  const db = getDb();
+
+  const feature = db
+    .select()
+    .from(featureRequests)
+    .where(eq(featureRequests.id, featureId))
+    .get();
+  if (!feature) {
+    return c.json({ detail: "Feature not found" }, 404);
+  }
+
+  // Delete votes first (FK constraint)
+  db.delete(featureVotes).where(eq(featureVotes.featureId, featureId)).run();
+  db.delete(featureRequests).where(eq(featureRequests.id, featureId)).run();
+
+  broadcastEvent(
+    featureUpdateEvent({
+      featureId,
+      title: feature.title,
+      status: "deleted",
+      updateType: "deleted",
+    })
+  );
+
+  return c.json({ deleted: true, id: featureId });
 });
 
 // POST /features/:featureId/vote
