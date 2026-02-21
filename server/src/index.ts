@@ -12,6 +12,7 @@ import { serveStatic } from "hono/bun";
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 
+import type { AppBindings } from "./types/index";
 import { config, BASE_DIR } from "./lib/config";
 import { getDb, closeDb } from "./db";
 import { agents, messages, channels, users } from "./db/schema";
@@ -27,6 +28,7 @@ import {
 } from "./services/ws-manager";
 import { startLivenessTask, stopLivenessTask } from "./routes/agents";
 import { createMcpServer } from "./mcp/server";
+import { authMiddleware } from "./middleware/auth";
 
 // Route modules
 import usersRoutes from "./routes/users";
@@ -34,6 +36,8 @@ import channelsRoutes from "./routes/channels";
 import messagesRoutes from "./routes/messages";
 import agentsRoutes from "./routes/agents";
 import featuresRoutes from "./routes/features";
+import workspacesRoutes from "./routes/workspaces";
+import authRoutes from "./routes/auth";
 
 // ---------------------------------------------------------------------------
 // Initialize database
@@ -47,7 +51,7 @@ console.log(`[DB] Database initialized at ${config.dbPath}`);
 // Hono app
 // ---------------------------------------------------------------------------
 
-const app = new Hono();
+const app = new Hono<AppBindings>();
 
 // Middleware
 app.use("*", logger());
@@ -56,11 +60,20 @@ app.use(
   cors({
     origin: config.network ? "*" : [`http://localhost:${config.frontendPort}`],
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
+// Auth middleware on all API routes (public paths are skipped internally)
+app.use("/api/*", authMiddleware);
+
+// Health check (before other routes — authMiddleware skips /api/health)
+app.get("/api/health", (c) => c.json({ status: "ok", version: "0.1.0" }));
+
 // Mount API routes
+app.route("/api/auth", authRoutes);
+app.route("/api/workspaces", workspacesRoutes);
 app.route("/api/users", usersRoutes);
 app.route("/api/channels", channelsRoutes);
 app.route("/api/agents", agentsRoutes);
@@ -68,9 +81,6 @@ app.route("/api/features", featuresRoutes);
 
 // Messages are nested under channels: /api/channels/:channelId/messages
 app.route("/api/channels/:channelId/messages", messagesRoutes);
-
-// Health check
-app.get("/api/health", (c) => c.json({ status: "ok", version: "0.1.0" }));
 
 // Search messages across all channels
 app.get("/api/search", (c) => {

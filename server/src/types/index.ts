@@ -180,3 +180,130 @@ export interface ReactionEvent {
   user_name: string;
   action: "add" | "remove";
 }
+
+// ---------------------------------------------------------------------------
+// Workspace
+// ---------------------------------------------------------------------------
+
+export const WorkspaceCreateSchema = z.object({
+  name: z.string().min(1).max(100),
+  slug: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9][a-z0-9_-]*$/, "Slug must be lowercase alphanumeric with hyphens/underscores"),
+  description: z.string().max(500).optional(),
+  type: z.enum(["personal", "shared"]).default("shared"),
+});
+export type WorkspaceCreate = z.infer<typeof WorkspaceCreateSchema>;
+
+export const WorkspaceUpdateSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
+  onboarding_prompt: z.string().max(10000).optional(),
+  human_welcome: z.string().max(5000).optional(),
+});
+export type WorkspaceUpdate = z.infer<typeof WorkspaceUpdateSchema>;
+
+export interface WorkspaceResponse {
+  id: string;
+  name: string;
+  slug: string;
+  type: string;
+  description?: string | null;
+  created_by: string;
+  created_at: string;
+  member_count?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Workspace Members
+// ---------------------------------------------------------------------------
+
+export const MemberUpdateSchema = z.object({
+  role: z.enum(["admin", "member"]),
+});
+export type MemberUpdate = z.infer<typeof MemberUpdateSchema>;
+
+export interface MemberResponse {
+  user_id: string;
+  user_name: string;
+  display_name?: string | null;
+  user_type: string;
+  role: string;
+  joined_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// API Keys
+// ---------------------------------------------------------------------------
+
+export const ApiKeyCreateSchema = z.object({
+  name: z.string().max(100).optional(),
+  expires_in_days: z.number().int().min(1).max(365).optional(),
+});
+export type ApiKeyCreate = z.infer<typeof ApiKeyCreateSchema>;
+
+export interface ApiKeyResponse {
+  id: string;
+  workspace_id: string;
+  key_prefix: string;
+  name?: string | null;
+  created_by: string;
+  created_at: string;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  last_used_at?: string | null;
+}
+
+/** Returned only once when the key is created (includes the raw key). */
+export interface ApiKeyCreatedResponse extends ApiKeyResponse {
+  raw_key: string;
+}
+
+// ---------------------------------------------------------------------------
+// Workspace Invites
+// ---------------------------------------------------------------------------
+
+export const InviteCreateSchema = z.object({
+  role: z.enum(["admin", "member"]).default("member"),
+  max_uses: z.number().int().min(1).optional(),
+  expires_in_days: z.number().int().min(1).max(365).optional(),
+});
+export type InviteCreate = z.infer<typeof InviteCreateSchema>;
+
+export interface InviteResponse {
+  id: string;
+  workspace_id: string;
+  token: string;
+  role: string;
+  max_uses?: number | null;
+  use_count: number;
+  expires_at?: string | null;
+  created_at: string;
+  revoked_at?: string | null;
+  invite_url?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+/** Context injected by the auth middleware into every request. */
+export interface AuthContext {
+  /** Authenticated user ID (or null for unauthenticated localhost access). */
+  userId: string | null;
+  /** Resolved workspace ID. Always set after middleware. */
+  workspaceId: string;
+  /** User's role in the workspace. */
+  role: "admin" | "member" | "none";
+  /** How this request was authenticated. */
+  authMethod: "session" | "apikey" | "localhost";
+}
+
+/** Hono app-level bindings for typed context. */
+export interface AppBindings {
+  Variables: {
+    auth: AuthContext;
+  };
+}
