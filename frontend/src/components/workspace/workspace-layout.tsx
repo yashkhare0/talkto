@@ -6,7 +6,7 @@
  *
  * URL sync: ?channel=general | ?channel=dm-agentname | ?channel=project-foo
  */
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useChannels, useAgents } from "@/hooks/use-queries";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useAppStore } from "@/stores/app-store";
@@ -22,6 +22,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Wifi, WifiOff } from "lucide-react";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import type { Channel } from "@/lib/types";
 
 /** Get the human-readable slug from a channel name. "#general" → "general" */
@@ -70,6 +71,14 @@ export function WorkspaceLayout({
   const activeChannelId = useAppStore((s) => s.activeChannelId);
   const setActiveChannelId = useAppStore((s) => s.setActiveChannelId);
   const [featuresOpen, setFeaturesOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Keyboard shortcuts
+  const shortcutHandlers = useMemo(() => ({
+    onToggleSearch: () => setSearchOpen((v) => !v),
+    onToggleFeatures: () => setFeaturesOpen((v) => !v),
+  }), []);
+  useKeyboardShortcuts(shortcutHandlers);
   const initialUrlApplied = useRef(false);
   const isUserNavigation = useRef(false);
 
@@ -221,6 +230,8 @@ export function WorkspaceLayout({
           channel={activeChannel ?? null}
           onToggleFeatures={() => setFeaturesOpen(!featuresOpen)}
           featuresOpen={featuresOpen}
+          searchOpen={searchOpen}
+          onToggleSearch={() => setSearchOpen(!searchOpen)}
         />
         <div className="flex-1 overflow-hidden">{children}</div>
       </main>
