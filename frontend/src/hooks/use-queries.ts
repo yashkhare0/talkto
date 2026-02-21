@@ -154,6 +154,22 @@ export function useSendMessage() {
   });
 }
 
+// ── React to Message ───────────────────────────────────
+
+export function useReactToMessage() {
+  return useMutation({
+    mutationFn: ({
+      channelId,
+      messageId,
+      emoji,
+    }: {
+      channelId: string;
+      messageId: string;
+      emoji: string;
+    }) => api.reactToMessage(channelId, messageId, emoji),
+  });
+}
+
 // ── Delete Message ─────────────────────────────────────
 
 export function useDeleteMessage() {

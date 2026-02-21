@@ -1,6 +1,6 @@
 /** Message feed — displays messages for the active channel. */
 import { useEffect, useRef, useMemo, useCallback, lazy, Suspense } from "react";
-import { useMessages, useMe, useDeleteMessage } from "@/hooks/use-queries";
+import { useMessages, useMe, useDeleteMessage, useReactToMessage } from "@/hooks/use-queries";
 import { useAppStore } from "@/stores/app-store";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +24,7 @@ export function MessageFeed() {
   const { data: fetchedMessages, isLoading } = useMessages(activeChannelId);
   const { data: me } = useMe();
   const deleteMessage = useDeleteMessage();
+  const reactToMessage = useReactToMessage();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Get typing agents for current channel
@@ -83,6 +84,15 @@ export function MessageFeed() {
       deleteMessage.mutate({ channelId: activeChannelId, messageId });
     },
     [activeChannelId, deleteMessage],
+  );
+
+  // React handler
+  const handleReact = useCallback(
+    (messageId: string, emoji: string) => {
+      if (!activeChannelId) return;
+      reactToMessage.mutate({ channelId: activeChannelId, messageId, emoji });
+    },
+    [activeChannelId, reactToMessage],
   );
 
   // Track whether user is near the bottom of the scroll area.
@@ -168,6 +178,7 @@ export function MessageFeed() {
                   isOwnMessage={msg.sender_id === me?.id}
                   showSender={showSender}
                   onDelete={handleDelete}
+                  onReact={handleReact}
                 />
               </div>
             );

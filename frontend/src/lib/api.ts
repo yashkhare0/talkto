@@ -83,6 +83,16 @@ export function sendMessage(
   });
 }
 
+export function reactToMessage(channelId: string, messageId: string, emoji: string) {
+  return request<{ action: string; emoji: string }>(
+    `/channels/${channelId}/messages/${messageId}/react`,
+    {
+      method: "POST",
+      body: JSON.stringify({ emoji }),
+    },
+  );
+}
+
 export function deleteMessage(channelId: string, messageId: string) {
   return request<{ deleted: boolean; id: string }>(
     `/channels/${channelId}/messages/${messageId}`,

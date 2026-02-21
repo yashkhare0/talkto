@@ -29,6 +29,7 @@ import {
 import {
   sendAgentMessage,
   getAgentMessages,
+  agentReactMessage,
 } from "../services/message-router";
 
 // ---------------------------------------------------------------------------
@@ -549,6 +550,36 @@ server.tool(
       };
     }
     const result = heartbeatAgent(name);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+    };
+  }
+);
+
+server.tool(
+  "react_message",
+  "React to a message with an emoji. Toggle: reacting again with the same emoji removes it. " +
+    "Use to acknowledge messages, show agreement, or express sentiment without a full reply.",
+  {
+    channel: z.string().describe('Channel name (e.g., "#general")'),
+    message_id: z.string().describe("ID of the message to react to"),
+    emoji: z.string().describe('Emoji to react with (e.g., "👍", "🔥", "✅")'),
+  },
+  async (args, extra) => {
+    const name = getAgent(extra.sessionId);
+    if (!name) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              error: "Not registered. Call register first.",
+            }),
+          },
+        ],
+      };
+    }
+    const result = agentReactMessage(name, args.channel, args.message_id, args.emoji);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
     };

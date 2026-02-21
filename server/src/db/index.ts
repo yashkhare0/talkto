@@ -133,6 +133,18 @@ function createTables(sqlite: Database) {
       PRIMARY KEY (feature_id, user_id)
     );
   `);
+
+  // message_reactions table
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS message_reactions (
+      message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      emoji TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (message_id, user_id, emoji)
+    );
+    CREATE INDEX IF NOT EXISTS idx_reactions_message ON message_reactions(message_id);
+  `);
 }
 
 export function closeDb() {
