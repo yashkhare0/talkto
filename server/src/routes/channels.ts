@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { eq, asc } from "drizzle-orm";
 import { getDb } from "../db";
-import { channels } from "../db/schema";
+import { channels, channelMembers, users, agents } from "../db/schema";
 import { ChannelCreateSchema } from "../types";
 import type { ChannelResponse } from "../types";
 
@@ -77,6 +77,52 @@ app.get("/:channelId", (c) => {
     return c.json({ detail: "Channel not found" }, 404);
   }
   return c.json(channelToResponse(channel));
+});
+
+// GET /channels/:channelId/members — list all members in a channel
+app.get("/:channelId/members", (c) => {
+  const channelId = c.req.param("channelId");
+  const db = getDb();
+
+  // Verify channel exists
+  const channel = db
+    .select()
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .get();
+  if (!channel) {
+    return c.json({ detail: "Channel not found" }, 404);
+  }
+
+  // Fetch members with user info and optional agent info
+  const members = db
+    .select({
+      userId: channelMembers.userId,
+      joinedAt: channelMembers.joinedAt,
+      name: users.name,
+      displayName: users.displayName,
+      type: users.type,
+      agentName: agents.agentName,
+      agentType: agents.agentType,
+      status: agents.status,
+    })
+    .from(channelMembers)
+    .innerJoin(users, eq(channelMembers.userId, users.id))
+    .leftJoin(agents, eq(channelMembers.userId, agents.id))
+    .where(eq(channelMembers.channelId, channelId))
+    .all();
+
+  const result = members.map((m) => ({
+    user_id: m.userId,
+    name: m.displayName ?? m.name,
+    type: m.type,
+    joined_at: m.joinedAt,
+    agent_name: m.agentName ?? null,
+    agent_type: m.agentType ?? null,
+    status: m.status ?? null,
+  }));
+
+  return c.json(result);
 });
 
 export default app;
