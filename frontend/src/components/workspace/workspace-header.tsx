@@ -33,12 +33,16 @@ interface WorkspaceHeaderProps {
   channel: Channel | null;
   onToggleFeatures?: () => void;
   featuresOpen?: boolean;
+  searchOpen?: boolean;
+  onToggleSearch?: () => void;
 }
 
 export function WorkspaceHeader({
   channel,
   onToggleFeatures,
   featuresOpen,
+  searchOpen: searchOpenProp,
+  onToggleSearch: onToggleSearchProp,
 }: WorkspaceHeaderProps) {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
@@ -48,7 +52,8 @@ export function WorkspaceHeader({
   const { data: me } = useMe();
   const { data: agents } = useAgents();
   const [profileOpen, setProfileOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const searchOpen = searchOpenProp ?? false;
+  const toggleSearch = onToggleSearchProp ?? (() => {});
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<api.SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -163,7 +168,7 @@ export function WorkspaceHeader({
               size="icon-sm"
               className="text-muted-foreground hover:text-foreground"
               onClick={() => {
-                setSearchOpen((v) => !v);
+                toggleSearch();
                 if (searchOpen) {
                   setSearchQuery("");
                   setSearchResults([]);
@@ -246,7 +251,7 @@ export function WorkspaceHeader({
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search messages..."
+              placeholder="Search messages... (⌘K)"
               className="w-full rounded-md border border-border/60 bg-muted/20 py-1.5 pl-9 pr-8 text-sm placeholder:text-muted-foreground/40 focus:border-primary/30 focus:outline-none focus:ring-1 focus:ring-primary/10"
               autoFocus
             />
