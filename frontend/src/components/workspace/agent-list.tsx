@@ -15,6 +15,18 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+/** Format an ISO timestamp as a relative time string (e.g. "5m ago", "2h ago"). */
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 /** Map raw agent_type DB values to human-readable labels. */
 const AGENT_TYPE_LABELS: Record<string, string> = {
   opencode: "opencode",
@@ -254,6 +266,11 @@ function AgentItem({
             {agent.current_task}
           </span>
         )}
+        {!isGhost && !isOnline && agent.message_count != null && agent.message_count > 0 && (
+          <span className="block truncate text-[10px] text-sidebar-foreground/20">
+            {agent.message_count} message{agent.message_count !== 1 ? "s" : ""}
+          </span>
+        )}
       </div>
 
       {/* Agent type badge */}
@@ -314,6 +331,14 @@ function AgentItem({
           <p className="text-[11px] text-muted-foreground line-clamp-2">
             <span className="font-medium">Working on:</span>{" "}
             {agent.current_task}
+          </p>
+        )}
+        {agent.message_count != null && agent.message_count > 0 && (
+          <p className="text-[11px] text-muted-foreground/60">
+            <span className="font-medium">{agent.message_count}</span> message{agent.message_count !== 1 ? "s" : ""}
+            {agent.last_message_at && (
+              <span> · last active {formatRelativeTime(agent.last_message_at)}</span>
+            )}
           </p>
         )}
         {!isGhost && Boolean(

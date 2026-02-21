@@ -3,9 +3,9 @@
  */
 
 import { Hono } from "hono";
-import { eq, asc, desc, and } from "drizzle-orm";
+import { eq, asc, desc, and, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { agents, channels, channelMembers, sessions, users } from "../db/schema";
+import { agents, channels, channelMembers, messages, sessions, users } from "../db/schema";
 import type { AgentResponse, ChannelResponse } from "../types";
 import { isSessionAlive as isClaudeSessionAlive } from "../sdk/claude";
 import { isSessionAlive as isCodexSessionAlive } from "../sdk/codex";
@@ -168,10 +168,90 @@ app.get("/", (c) => {
   const db = getDb();
   const allAgents = db.select().from(agents).orderBy(asc(agents.agentName)).all();
 
-  const responses = allAgents.map((a) =>
-    agentToResponse(a, ghostCache.get(a.id) ?? false)
-  );
+  // Batch-fetch message counts and last message timestamps for all agents
+  const stats = db
+    .select({
+      senderId: messages.senderId,
+      count: sql<number>`count(*)`,
+      lastAt: sql<string>`max(${messages.createdAt})`,
+    })
+    .from(messages)
+    .groupBy(messages.senderId)
+    .all();
+
+  const statsMap = new Map(stats.map((s) => [s.senderId, s]));
+
+  const responses = allAgents.map((a) => {
+    const agentStats = statsMap.get(a.id);
+    return {
+      ...agentToResponse(a, ghostCache.get(a.id) ?? false),
+      message_count: agentStats?.count ?? 0,
+      last_message_at: agentStats?.lastAt ?? null,
+    };
+  });
   return c.json(responses);
+});
+
+// GET /agents/:agentName/stats — activity stats for an agent
+app.get("/:agentName/stats", (c) => {
+  const db = getDb();
+  const agent = db
+    .select()
+    .from(agents)
+    .where(eq(agents.agentName, c.req.param("agentName")))
+    .get();
+  if (!agent) {
+    return c.json({ detail: "Agent not found" }, 404);
+  }
+
+  // Count messages sent by this agent
+  const messageCount = db
+    .select({ count: sql<number>`count(*)` })
+    .from(messages)
+    .where(eq(messages.senderId, agent.id))
+    .get();
+
+  // Get channels this agent is a member of
+  const memberChannels = db
+    .select({ count: sql<number>`count(*)` })
+    .from(channelMembers)
+    .where(eq(channelMembers.userId, agent.id))
+    .get();
+
+  // Last message timestamp
+  const lastMessage = db
+    .select({ createdAt: messages.createdAt })
+    .from(messages)
+    .where(eq(messages.senderId, agent.id))
+    .orderBy(desc(messages.createdAt))
+    .limit(1)
+    .get();
+
+  // Session history — total sessions and current active session
+  const totalSessions = db
+    .select({ count: sql<number>`count(*)` })
+    .from(sessions)
+    .where(eq(sessions.agentId, agent.id))
+    .get();
+
+  const activeSession = db
+    .select()
+    .from(sessions)
+    .where(and(eq(sessions.agentId, agent.id), eq(sessions.isActive, 1)))
+    .orderBy(desc(sessions.startedAt))
+    .limit(1)
+    .get();
+
+  return c.json({
+    agent_name: agent.agentName,
+    agent_type: agent.agentType,
+    message_count: messageCount?.count ?? 0,
+    channel_count: memberChannels?.count ?? 0,
+    last_message_at: lastMessage?.createdAt ?? null,
+    total_sessions: totalSessions?.count ?? 0,
+    current_session_started: activeSession?.startedAt ?? null,
+    last_heartbeat: activeSession?.lastHeartbeat ?? null,
+  });
 });
 
 // GET /agents/:agentName

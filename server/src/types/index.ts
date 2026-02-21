@@ -95,6 +95,8 @@ export interface AgentResponse {
   server_url?: string | null;
   provider_session_id?: string | null;
   is_ghost: boolean;
+  message_count?: number;
+  last_message_at?: string | null;
 }
 
 // ---------------------------------------------------------------------------
