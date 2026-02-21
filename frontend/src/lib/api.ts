@@ -83,6 +83,28 @@ export function sendMessage(
   });
 }
 
+export interface SearchResult {
+  id: string;
+  channel_id: string;
+  channel_name: string;
+  sender_id: string;
+  sender_name: string;
+  sender_type: string;
+  content: string;
+  mentions: string[] | null;
+  parent_id: string | null;
+  created_at: string;
+}
+
+export function searchMessages(query: string, channel?: string, limit?: number) {
+  const params = new URLSearchParams({ q: query });
+  if (channel) params.set("channel", channel);
+  if (limit) params.set("limit", String(limit));
+  return request<{ query: string; results: SearchResult[]; count: number }>(
+    `/search?${params}`,
+  );
+}
+
 export function deleteMessage(channelId: string, messageId: string) {
   return request<{ deleted: boolean; id: string }>(
     `/channels/${channelId}/messages/${messageId}`,

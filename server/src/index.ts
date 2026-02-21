@@ -14,7 +14,8 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 
 import { config, BASE_DIR } from "./lib/config";
 import { getDb, closeDb } from "./db";
-import { agents } from "./db/schema";
+import { agents, messages, channels, users } from "./db/schema";
+import { eq, like, desc, sql } from "drizzle-orm";
 import { seedDefaults } from "./db/seed";
 import {
   acceptClient,
@@ -69,6 +70,61 @@ app.route("/api/channels/:channelId/messages", messagesRoutes);
 
 // Health check
 app.get("/api/health", (c) => c.json({ status: "ok", version: "0.1.0" }));
+
+// Search messages across all channels
+app.get("/api/search", (c) => {
+  const query = c.req.query("q");
+  if (!query || query.trim().length === 0) {
+    return c.json({ detail: "Query parameter 'q' is required" }, 400);
+  }
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "20", 10) || 20, 50);
+  const channelFilter = c.req.query("channel"); // optional channel name filter
+
+  const db = getDb();
+
+  let baseQuery = db
+    .select({
+      id: messages.id,
+      channelId: messages.channelId,
+      channelName: channels.name,
+      senderId: messages.senderId,
+      senderName: sql`coalesce(${users.displayName}, ${users.name})`,
+      senderType: users.type,
+      content: messages.content,
+      mentions: messages.mentions,
+      parentId: messages.parentId,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
+    .innerJoin(users, eq(messages.senderId, users.id))
+    .innerJoin(channels, eq(messages.channelId, channels.id))
+    .where(like(messages.content, `%${query}%`))
+    .$dynamic();
+
+  if (channelFilter) {
+    baseQuery = baseQuery.where(eq(channels.name, channelFilter));
+  }
+
+  const rows = baseQuery
+    .orderBy(desc(messages.createdAt))
+    .limit(limit)
+    .all();
+
+  const results = rows.map((row: Record<string, unknown>) => ({
+    id: row.id,
+    channel_id: row.channelId,
+    channel_name: row.channelName,
+    sender_id: row.senderId,
+    sender_name: row.senderName,
+    sender_type: row.senderType,
+    content: row.content,
+    mentions: row.mentions ? JSON.parse(row.mentions as string) : null,
+    parent_id: row.parentId,
+    created_at: row.createdAt,
+  }));
+
+  return c.json({ query, results, count: results.length });
+});
 
 // ---------------------------------------------------------------------------
 // MCP Server — streamable HTTP transport at /mcp

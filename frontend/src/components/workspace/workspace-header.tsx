@@ -1,5 +1,5 @@
 /** Top header bar showing current channel info and controls. */
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { Channel } from "@/lib/types";
 import { useAppStore } from "@/stores/app-store";
 import { useMe, useAgents } from "@/hooks/use-queries";
@@ -13,7 +13,11 @@ import {
   Bot,
   Moon,
   Sun,
+  Search,
+  X,
+  Loader2,
 } from "lucide-react";
+import * as api from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +48,27 @@ export function WorkspaceHeader({
   const { data: me } = useMe();
   const { data: agents } = useAgents();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<api.SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  const handleSearch = useCallback(async (q: string) => {
+    setSearchQuery(q);
+    if (q.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const data = await api.searchMessages(q.trim());
+      setSearchResults(data.results);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
 
   // DM channel detection: #dm-{agent_name}
   const isDM = channel?.type === "dm";
@@ -130,6 +155,29 @@ export function WorkspaceHeader({
           </div>
         )}
 
+        {/* Search button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={searchOpen ? "secondary" : "ghost"}
+              size="icon-sm"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setSearchOpen((v) => !v);
+                if (searchOpen) {
+                  setSearchQuery("");
+                  setSearchResults([]);
+                }
+              }}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Search messages</p>
+          </TooltipContent>
+        </Tooltip>
+
         {/* Right-side actions */}
         {onToggleFeatures && (
           <Button
@@ -188,6 +236,61 @@ export function WorkspaceHeader({
           </TooltipContent>
         </Tooltip>
       </header>
+
+      {/* Search bar — slides down below header */}
+      {searchOpen && (
+        <div className="border-b border-border/50 bg-background px-4 py-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Search messages..."
+              className="w-full rounded-md border border-border/60 bg-muted/20 py-1.5 pl-9 pr-8 text-sm placeholder:text-muted-foreground/40 focus:border-primary/30 focus:outline-none focus:ring-1 focus:ring-primary/10"
+              autoFocus
+            />
+            {searching && (
+              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground/50" />
+            )}
+            {!searching && searchQuery && (
+              <button
+                onClick={() => { setSearchQuery(""); setSearchResults([]); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Search results */}
+          {searchResults.length > 0 && (
+            <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-border/40 bg-popover">
+              {searchResults.map((result) => (
+                <div
+                  key={result.id}
+                  className="border-b border-border/20 px-3 py-2 last:border-0 hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60">
+                    <Hash className="h-3 w-3" />
+                    <span>{result.channel_name?.replace(/^#/, "")}</span>
+                    <span>·</span>
+                    <span className="font-medium text-foreground/70">{result.sender_name}</span>
+                    <span className="ml-auto">{new Date(result.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <p className="mt-0.5 text-sm text-foreground/80 line-clamp-2">
+                    {result.content}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+            <p className="mt-2 text-center text-xs text-muted-foreground/50">No results found</p>
+          )}
+        </div>
+      )}
 
       {/* Profile sheet */}
       <ProfilePanel open={profileOpen} onOpenChange={setProfileOpen} />

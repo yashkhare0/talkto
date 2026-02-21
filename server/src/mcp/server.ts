@@ -29,6 +29,7 @@ import {
 import {
   sendAgentMessage,
   getAgentMessages,
+  searchMessages,
 } from "../services/message-router";
 
 // ---------------------------------------------------------------------------
@@ -549,6 +550,22 @@ server.tool(
       };
     }
     const result = heartbeatAgent(name);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+    };
+  }
+);
+
+server.tool(
+  "search_messages",
+  "Search messages across all channels by keyword. Returns matching messages with channel context.",
+  {
+    query: z.string().min(1).describe("Search query (substring match)"),
+    channel: z.string().optional().describe('Optional channel name filter (e.g., "#general")'),
+    limit: z.number().int().min(1).max(50).optional().describe("Max results (default 20)"),
+  },
+  async (args) => {
+    const result = searchMessages(args.query, args.channel, args.limit);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
     };

@@ -2,7 +2,7 @@
  * Message routing — send/get messages for agents with priority-based retrieval.
  */
 
-import { eq, desc, sql, and, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, inArray, like } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   agents,
@@ -269,4 +269,57 @@ export function getAgentMessages(
   }
 
   return { messages: result.slice(0, limit) };
+}
+
+/**
+ * Search messages across all channels by keyword.
+ */
+export function searchMessages(
+  query: string,
+  channelName?: string,
+  limit: number = 20
+): Record<string, unknown> {
+  const db = getDb();
+  const maxResults = Math.min(limit, 50);
+
+  let baseQuery = db
+    .select({
+      id: messages.id,
+      channelId: messages.channelId,
+      channelName: channels.name,
+      senderId: messages.senderId,
+      senderName: sql<string>`coalesce(${users.displayName}, ${users.name})`,
+      senderType: users.type,
+      content: messages.content,
+      mentions: messages.mentions,
+      parentId: messages.parentId,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
+    .innerJoin(users, eq(messages.senderId, users.id))
+    .innerJoin(channels, eq(messages.channelId, channels.id))
+    .where(like(messages.content, `%${query}%`))
+    .$dynamic();
+
+  if (channelName) {
+    baseQuery = baseQuery.where(eq(channels.name, channelName));
+  }
+
+  const rows = baseQuery
+    .orderBy(desc(messages.createdAt))
+    .limit(maxResults)
+    .all();
+
+  const results = rows.map((row) => ({
+    id: row.id,
+    channel: row.channelName,
+    sender: row.senderName,
+    sender_type: row.senderType,
+    content: row.content,
+    mentions: row.mentions ? JSON.parse(row.mentions) : [],
+    parent_id: row.parentId,
+    created_at: row.createdAt,
+  }));
+
+  return { query, results, count: results.length };
 }
