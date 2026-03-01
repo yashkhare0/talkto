@@ -3,9 +3,20 @@
  */
 
 import { Hono } from "hono";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { getDb, DEFAULT_WORKSPACE_ID } from "../db";
-import { users, channels, messages, workspaceMembers } from "../db/schema";
+import {
+  users,
+  channels,
+  messages,
+  workspaceMembers,
+  channelMembers,
+  messageReactions,
+  readReceipts,
+  featureRequests,
+  featureVotes,
+  userSessions,
+} from "../db/schema";
 import { UserOnboardSchema } from "../types";
 import { broadcastEvent, newMessageEvent } from "../services/broadcaster";
 import { CREATOR_NAME } from "../services/name-generator";
@@ -224,6 +235,45 @@ app.delete("/me", (c) => {
     console.warn(
       `Deleting human user '${user.displayName ?? user.name}' (id=${user.id})`
     );
+
+    // Clean up dependents in FK-safe order (children before parent).
+    // With CASCADE FKs on new DBs this is redundant but ensures
+    // correctness on older DBs that haven't run the migration yet.
+    const userMsgIds = db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(eq(messages.senderId, user.id))
+      .all()
+      .map((m) => m.id);
+    if (userMsgIds.length > 0) {
+      db.delete(messageReactions)
+        .where(inArray(messageReactions.messageId, userMsgIds))
+        .run();
+    }
+    db.delete(messageReactions)
+      .where(eq(messageReactions.userId, user.id))
+      .run();
+    db.delete(messages)
+      .where(eq(messages.senderId, user.id))
+      .run();
+    db.delete(readReceipts)
+      .where(eq(readReceipts.userId, user.id))
+      .run();
+    db.delete(channelMembers)
+      .where(eq(channelMembers.userId, user.id))
+      .run();
+    db.delete(featureVotes)
+      .where(eq(featureVotes.userId, user.id))
+      .run();
+    db.delete(featureRequests)
+      .where(eq(featureRequests.createdBy, user.id))
+      .run();
+    db.delete(userSessions)
+      .where(eq(userSessions.userId, user.id))
+      .run();
+    db.delete(workspaceMembers)
+      .where(eq(workspaceMembers.userId, user.id))
+      .run();
     db.delete(users).where(eq(users.id, user.id)).run();
   }
   return c.body(null, 204);

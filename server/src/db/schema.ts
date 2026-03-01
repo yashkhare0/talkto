@@ -14,6 +14,7 @@ import {
   integer,
   index,
   primaryKey,
+  unique,
 } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
@@ -239,7 +240,9 @@ export const agents = sqliteTable(
     gender: text("gender"),
     serverUrl: text("server_url"),
     providerSessionId: text("provider_session_id"),
-    workspaceId: text("workspace_id").references(() => workspaces.id),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
   },
   (table) => [
     index("idx_agents_name").on(table.agentName),
@@ -289,7 +292,7 @@ export const channels = sqliteTable(
   "channels",
   {
     id: text("id").primaryKey(),
-    name: text("name").notNull().unique(),
+    name: text("name").notNull(),
     type: text("type").notNull(), // "general" | "project" | "custom" | "dm"
     topic: text("topic"), // channel topic/description shown in header
     projectPath: text("project_path"),
@@ -297,11 +300,14 @@ export const channels = sqliteTable(
     createdAt: text("created_at").notNull(),
     isArchived: integer("is_archived").notNull().default(0),
     archivedAt: text("archived_at"),
-    workspaceId: text("workspace_id").references(() => workspaces.id),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
   },
   (table) => [
     index("idx_channels_name").on(table.name),
     index("idx_channels_workspace").on(table.workspaceId),
+    unique("uq_channel_name_workspace").on(table.name, table.workspaceId),
   ]
 );
 

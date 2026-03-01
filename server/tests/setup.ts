@@ -57,8 +57,8 @@ export function createTestDb(): TestDb {
   // workspace_members
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS workspace_members (
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
-    user_id TEXT NOT NULL REFERENCES users(id),
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role TEXT NOT NULL,
     joined_at TEXT NOT NULL,
     PRIMARY KEY (workspace_id, user_id)
@@ -71,11 +71,11 @@ export function createTestDb(): TestDb {
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS workspace_api_keys (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     key_hash TEXT NOT NULL,
     key_prefix TEXT NOT NULL,
     name TEXT,
-    created_by TEXT NOT NULL REFERENCES users(id),
+    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TEXT NOT NULL,
     expires_at TEXT,
     revoked_at TEXT,
@@ -90,9 +90,9 @@ export function createTestDb(): TestDb {
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS workspace_invites (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     token TEXT NOT NULL UNIQUE,
-    created_by TEXT NOT NULL REFERENCES users(id),
+    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role TEXT NOT NULL DEFAULT 'member',
     max_uses INTEGER,
     use_count INTEGER NOT NULL DEFAULT 0,
@@ -109,9 +109,9 @@ export function createTestDb(): TestDb {
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS user_sessions (
     id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id),
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash TEXT NOT NULL,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     created_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
     last_active_at TEXT
@@ -124,7 +124,7 @@ export function createTestDb(): TestDb {
   // agents
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS agents (
-    id TEXT PRIMARY KEY REFERENCES users(id),
+    id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     agent_name TEXT NOT NULL UNIQUE,
     agent_type TEXT NOT NULL,
     project_path TEXT NOT NULL,
@@ -136,7 +136,7 @@ export function createTestDb(): TestDb {
     gender TEXT,
     server_url TEXT,
     provider_session_id TEXT,
-    workspace_id TEXT REFERENCES workspaces(id)
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id)
   )`);
 
   db.run(sql`CREATE INDEX IF NOT EXISTS idx_agents_name ON agents(agent_name)`);
@@ -148,7 +148,7 @@ export function createTestDb(): TestDb {
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
-    agent_id TEXT NOT NULL REFERENCES agents(id),
+    agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
     pid INTEGER NOT NULL,
     tty TEXT NOT NULL,
     is_active INTEGER NOT NULL DEFAULT 1,
@@ -164,7 +164,7 @@ export function createTestDb(): TestDb {
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS channels (
     id TEXT PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
     type TEXT NOT NULL,
     topic TEXT,
     project_path TEXT,
@@ -172,7 +172,8 @@ export function createTestDb(): TestDb {
     created_at TEXT NOT NULL,
     is_archived INTEGER NOT NULL DEFAULT 0,
     archived_at TEXT,
-    workspace_id TEXT REFERENCES workspaces(id)
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+    UNIQUE(name, workspace_id)
   )`);
 
   db.run(sql`CREATE INDEX IF NOT EXISTS idx_channels_name ON channels(name)`);
@@ -182,8 +183,8 @@ export function createTestDb(): TestDb {
   // channel_members (composite PK)
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS channel_members (
-    channel_id TEXT NOT NULL REFERENCES channels(id),
-    user_id TEXT NOT NULL REFERENCES users(id),
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     joined_at TEXT NOT NULL,
     PRIMARY KEY (channel_id, user_id)
   )`);
@@ -193,11 +194,11 @@ export function createTestDb(): TestDb {
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
-    channel_id TEXT NOT NULL REFERENCES channels(id),
-    sender_id TEXT NOT NULL REFERENCES users(id),
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     mentions TEXT,
-    parent_id TEXT REFERENCES messages(id),
+    parent_id TEXT REFERENCES messages(id) ON DELETE SET NULL,
     is_pinned INTEGER NOT NULL DEFAULT 0,
     pinned_at TEXT,
     pinned_by TEXT,
@@ -209,8 +210,8 @@ export function createTestDb(): TestDb {
   db.run(sql`CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id)`);
 
   db.run(sql`CREATE TABLE IF NOT EXISTS read_receipts (
-    user_id TEXT NOT NULL REFERENCES users(id),
-    channel_id TEXT NOT NULL REFERENCES channels(id),
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
     last_read_at TEXT NOT NULL,
     PRIMARY KEY (user_id, channel_id)
   )`);
@@ -224,7 +225,7 @@ export function createTestDb(): TestDb {
     description TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'open',
     reason TEXT,
-    created_by TEXT NOT NULL REFERENCES users(id),
+    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TEXT NOT NULL,
     updated_at TEXT
   )`);
@@ -233,8 +234,8 @@ export function createTestDb(): TestDb {
   // feature_votes (composite PK)
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS feature_votes (
-    feature_id TEXT NOT NULL REFERENCES feature_requests(id),
-    user_id TEXT NOT NULL REFERENCES users(id),
+    feature_id TEXT NOT NULL REFERENCES feature_requests(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     vote INTEGER NOT NULL,
     PRIMARY KEY (feature_id, user_id)
   )`);
@@ -244,7 +245,7 @@ export function createTestDb(): TestDb {
   // -----------------------------------------------------------------
   db.run(sql`CREATE TABLE IF NOT EXISTS message_reactions (
     message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES users(id),
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     emoji TEXT NOT NULL,
     created_at TEXT NOT NULL,
     PRIMARY KEY (message_id, user_id, emoji)

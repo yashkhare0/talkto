@@ -5,7 +5,7 @@
  * No auth checking here — that's the middleware's job.
  */
 
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { getDb } from "../db/index";
 import { DEFAULT_WORKSPACE_ID } from "../db/index";
 import {
@@ -13,6 +13,13 @@ import {
   workspaceMembers,
   workspaceApiKeys,
   workspaceInvites,
+  channels,
+  channelMembers,
+  messages,
+  messageReactions,
+  readReceipts,
+  agents,
+  sessions,
   users,
 } from "../db/schema";
 import {
@@ -183,7 +190,10 @@ export function updateWorkspace(
 }
 
 /**
- * Delete a workspace. Cannot delete the default workspace.
+ * Delete a workspace and all its dependents. Cannot delete the default workspace.
+ *
+ * With CASCADE FKs this could be a single workspace delete, but we
+ * do explicit deletes for clarity and to support older DBs without CASCADE.
  */
 export function deleteWorkspace(
   workspaceId: string
@@ -194,7 +204,58 @@ export function deleteWorkspace(
 
   const db = getDb();
 
-  // Delete in FK order
+  // Gather channel IDs in this workspace
+  const wsChannels = db
+    .select({ id: channels.id })
+    .from(channels)
+    .where(eq(channels.workspaceId, workspaceId))
+    .all();
+  const channelIds = wsChannels.map((c) => c.id);
+
+  // Gather agent IDs in this workspace
+  const wsAgents = db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(eq(agents.workspaceId, workspaceId))
+    .all();
+  const agentIds = wsAgents.map((a) => a.id);
+
+  // Delete in FK-safe order (children before parents)
+  if (channelIds.length > 0) {
+    db.delete(messageReactions)
+      .where(
+        inArray(
+          messageReactions.messageId,
+          db
+            .select({ id: messages.id })
+            .from(messages)
+            .where(inArray(messages.channelId, channelIds))
+        )
+      )
+      .run();
+    db.delete(messages)
+      .where(inArray(messages.channelId, channelIds))
+      .run();
+    db.delete(readReceipts)
+      .where(inArray(readReceipts.channelId, channelIds))
+      .run();
+    db.delete(channelMembers)
+      .where(inArray(channelMembers.channelId, channelIds))
+      .run();
+    db.delete(channels)
+      .where(eq(channels.workspaceId, workspaceId))
+      .run();
+  }
+
+  if (agentIds.length > 0) {
+    db.delete(sessions)
+      .where(inArray(sessions.agentId, agentIds))
+      .run();
+    db.delete(agents)
+      .where(eq(agents.workspaceId, workspaceId))
+      .run();
+  }
+
   db.delete(workspaceInvites)
     .where(eq(workspaceInvites.workspaceId, workspaceId))
     .run();

@@ -118,6 +118,7 @@ describe("Database Schema", () => {
 
   it("inserts an agent with FK to users", () => {
     const db = createTestDb();
+    seedWorkspace(db);
     const userId = crypto.randomUUID();
     const now = new Date().toISOString();
 
@@ -133,6 +134,7 @@ describe("Database Schema", () => {
         projectPath: "/home/dev/test-project",
         projectName: "test",
         status: "online",
+        workspaceId: DEFAULT_WORKSPACE_ID,
       })
       .run();
 
@@ -173,6 +175,7 @@ describe("Database Schema", () => {
 
   it("enforces unique agent_name", () => {
     const db = createTestDb();
+    seedWorkspace(db);
     const now = new Date().toISOString();
     const id1 = crypto.randomUUID();
     const id2 = crypto.randomUUID();
@@ -187,6 +190,7 @@ describe("Database Schema", () => {
         agentType: "opencode",
         projectPath: "/home/dev/project-a",
         projectName: "test",
+        workspaceId: DEFAULT_WORKSPACE_ID,
       })
       .run();
 
@@ -202,6 +206,7 @@ describe("Database Schema", () => {
           agentType: "opencode",
           projectPath: "/home/dev/project-b",
           projectName: "test",
+          workspaceId: DEFAULT_WORKSPACE_ID,
         })
         .run();
     }).toThrow();
@@ -209,6 +214,7 @@ describe("Database Schema", () => {
 
   it("inserts and retrieves messages with joins", () => {
     const db = createTestDb();
+    seedWorkspace(db);
     const now = new Date().toISOString();
     const userId = crypto.randomUUID();
     const channelId = crypto.randomUUID();
@@ -224,6 +230,7 @@ describe("Database Schema", () => {
         type: "general",
         createdBy: "system",
         createdAt: now,
+        workspaceId: DEFAULT_WORKSPACE_ID,
       })
       .run();
     db.insert(messages)
@@ -245,6 +252,7 @@ describe("Database Schema", () => {
 
   it("supports composite primary key for channel_members", () => {
     const db = createTestDb();
+    seedWorkspace(db);
     const now = new Date().toISOString();
     const userId = crypto.randomUUID();
     const channelId = crypto.randomUUID();
@@ -259,6 +267,7 @@ describe("Database Schema", () => {
         type: "general",
         createdBy: "system",
         createdAt: now,
+        workspaceId: DEFAULT_WORKSPACE_ID,
       })
       .run();
     db.insert(channelMembers)
@@ -330,28 +339,50 @@ describe("Database Schema", () => {
     expect(ch!.workspaceId).toBe(DEFAULT_WORKSPACE_ID);
   });
 
-  it("allows channel without workspace_id (backward compat)", () => {
+  it("enforces NOT NULL workspace_id on channels", () => {
+    const db = createTestDb();
+
+    expect(() => {
+      db.insert(channels)
+        .values({
+          id: crypto.randomUUID(),
+          name: "#no-workspace",
+          type: "general",
+          createdBy: "system",
+          createdAt: new Date().toISOString(),
+        } as any)
+        .run();
+    }).toThrow();
+  });
+
+  it("allows same channel name in different workspaces", () => {
     const db = createTestDb();
     const now = new Date().toISOString();
-    const channelId = crypto.randomUUID();
 
-    db.insert(channels)
-      .values({
-        id: channelId,
-        name: "#no-workspace",
-        type: "general",
-        createdBy: "system",
-        createdAt: now,
-      })
-      .run();
+    // Create two workspaces
+    const ws1 = crypto.randomUUID();
+    const ws2 = crypto.randomUUID();
+    db.insert(workspaces).values({ id: ws1, name: "WS1", slug: "ws1", type: "personal", createdBy: "system", createdAt: now }).run();
+    db.insert(workspaces).values({ id: ws2, name: "WS2", slug: "ws2", type: "personal", createdBy: "system", createdAt: now }).run();
 
-    const ch = db
-      .select()
-      .from(channels)
-      .where(eq(channels.id, channelId))
-      .get();
-    expect(ch).toBeDefined();
-    expect(ch!.workspaceId).toBeNull();
+    // Same channel name in different workspaces should succeed
+    db.insert(channels).values({ id: crypto.randomUUID(), name: "#general", type: "general", createdBy: "system", createdAt: now, workspaceId: ws1 }).run();
+    db.insert(channels).values({ id: crypto.randomUUID(), name: "#general", type: "general", createdBy: "system", createdAt: now, workspaceId: ws2 }).run();
+
+    const all = db.select().from(channels).all();
+    expect(all).toHaveLength(2);
+  });
+
+  it("rejects duplicate channel name within same workspace", () => {
+    const db = createTestDb();
+    seedWorkspace(db);
+    const now = new Date().toISOString();
+
+    db.insert(channels).values({ id: crypto.randomUUID(), name: "#general", type: "general", createdBy: "system", createdAt: now, workspaceId: DEFAULT_WORKSPACE_ID }).run();
+
+    expect(() => {
+      db.insert(channels).values({ id: crypto.randomUUID(), name: "#general", type: "general", createdBy: "system", createdAt: now, workspaceId: DEFAULT_WORKSPACE_ID }).run();
+    }).toThrow();
   });
 });
 
