@@ -91,7 +91,7 @@ export function WorkspaceHeader({
 
   return (
     <>
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border/50 px-4">
+      <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b border-border/50 bg-background px-4">
         {/* Sidebar toggle */}
         <Button
           variant="ghost"
@@ -272,7 +272,7 @@ export function WorkspaceHeader({
 
       {/* Search bar — slides down below header */}
       {searchOpen && (
-        <div className="border-b border-border/50 bg-background px-4 py-2">
+        <div className="sticky top-14 z-10 border-b border-border/50 bg-background px-4 py-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
             <input
