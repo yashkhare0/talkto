@@ -313,6 +313,17 @@ export function useMembers(workspaceId: string | null) {
   });
 }
 
+export function useRemoveMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ workspaceId, userId }: { workspaceId: string; userId: string }) =>
+      api.removeMember(workspaceId, userId),
+    onSuccess: (_result, vars) => {
+      qc.invalidateQueries({ queryKey: queryKeys.members(vars.workspaceId) });
+    },
+  });
+}
+
 // ── API Keys ────────────────────────────────────────────
 
 export function useApiKeys(workspaceId: string | null) {

@@ -180,7 +180,9 @@ export function MessageInput({ channelId }: MessageInputProps) {
 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      if (!sendMessage.isPending) {
+        handleSubmit();
+      }
     }
   };
 

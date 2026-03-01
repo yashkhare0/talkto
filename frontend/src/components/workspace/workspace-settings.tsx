@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAppStore } from "@/stores/app-store";
 import {
   useMembers,
+  useRemoveMember,
   useApiKeys,
   useCreateApiKey,
   useRevokeApiKey,
@@ -98,13 +99,14 @@ export function WorkspaceSettings({ open, onOpenChange }: WorkspaceSettingsProps
 
 function MembersSection({
   members,
-  workspaceId: _workspaceId, // eslint-disable-line @typescript-eslint/no-unused-vars
+  workspaceId,
   isAdmin,
 }: {
   members: WorkspaceMember[];
   workspaceId: string | null;
   isAdmin: boolean;
 }) {
+  const removeMember = useRemoveMember();
   return (
     <section className="space-y-3">
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -123,6 +125,11 @@ function MembersSection({
             key={member.user_id}
             member={member}
             isAdmin={isAdmin}
+            onRemove={
+              isAdmin && workspaceId
+                ? () => removeMember.mutate({ workspaceId, userId: member.user_id })
+                : undefined
+            }
           />
         ))}
 
@@ -139,9 +146,11 @@ function MembersSection({
 function MemberRow({
   member,
   isAdmin,
+  onRemove,
 }: {
   member: WorkspaceMember;
   isAdmin: boolean;
+  onRemove?: () => void;
 }) {
   const initial = (member.display_name ?? member.user_name)?.[0]?.toUpperCase() ?? "?";
   const displayName = member.display_name ?? member.user_name;
@@ -170,12 +179,13 @@ function MemberRow({
       >
         {member.role}
       </Badge>
-      {isAdmin && member.role !== "admin" && (
+      {isAdmin && member.role !== "admin" && onRemove && (
         <Button
           variant="ghost"
           size="icon"
           className="h-6 w-6 text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
           title="Remove member"
+          onClick={onRemove}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>

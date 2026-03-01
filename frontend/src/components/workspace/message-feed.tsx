@@ -66,12 +66,12 @@ export function MessageFeed() {
     );
 
     const byId = new Map<string, Message>();
-    // Fetched messages come in reverse chronological — reverse them
-    for (const msg of [...fetched].reverse()) {
+    // Real-time messages first (optimistic)
+    for (const msg of realtime) {
       byId.set(msg.id, msg);
     }
-    // Real-time messages override fetched
-    for (const msg of realtime) {
+    // Fetched messages override real-time (API is authoritative)
+    for (const msg of [...fetched].reverse()) {
       byId.set(msg.id, msg);
     }
 

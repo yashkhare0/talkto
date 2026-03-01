@@ -79,6 +79,7 @@ export function WorkspaceLayout({
   // Keyboard shortcuts
   const shortcutHandlers = useMemo(() => ({
     onToggleSearch: () => setSearchOpen((v) => !v),
+    onCloseSearch: () => setSearchOpen(false),
     onToggleFeatures: () => setFeaturesOpen((v) => !v),
   }), []);
   useKeyboardShortcuts(shortcutHandlers);

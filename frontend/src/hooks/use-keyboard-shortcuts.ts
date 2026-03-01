@@ -4,6 +4,7 @@ import { useAppStore } from "@/stores/app-store";
 
 interface ShortcutHandlers {
   onToggleSearch?: () => void;
+  onCloseSearch?: () => void;
   onToggleSidebar?: () => void;
   onToggleFeatures?: () => void;
 }
@@ -32,7 +33,10 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers = {}) {
 
       if (e.key === "Escape") {
         // Escape always works — close panels, clear search, etc.
-        handlers.onToggleSearch?.();
+        // Use dedicated close handler if available (avoids reopening)
+        if (handlers.onCloseSearch) {
+          handlers.onCloseSearch();
+        }
         return;
       }
 

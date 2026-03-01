@@ -4,6 +4,7 @@
  * listing all workspaces with type badges and a "Create Workspace" form.
  */
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/stores/app-store";
 import { useWorkspaces, useCreateWorkspace } from "@/hooks/use-queries";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ export function WorkspaceSwitcher() {
   const workspaces = useAppStore((s) => s.workspaces);
   const setActiveWorkspaceId = useAppStore((s) => s.setActiveWorkspaceId);
 
+  const queryClient = useQueryClient();
   const { data: fetchedWorkspaces } = useWorkspaces();
   const createWorkspace = useCreateWorkspace();
 
@@ -28,11 +30,15 @@ export function WorkspaceSwitcher() {
   const displayName = activeWorkspace?.name ?? "Select Workspace";
 
   function handleSelect(id: string) {
+    if (id === activeWorkspaceId) {
+      setOpen(false);
+      return;
+    }
     setActiveWorkspaceId(id);
     setOpen(false);
     setShowCreate(false);
-    // Reload to refetch all queries for the new workspace context
-    window.location.reload();
+    // Clear all cached queries so they refetch under the new workspace context
+    queryClient.clear();
   }
 
   function handleCreate() {

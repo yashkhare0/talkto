@@ -97,7 +97,7 @@ export const useAppStore = create<AppState>((set) => ({
   // Active channel
   activeChannelId: null,
   setActiveChannelId: (id) =>
-    set({ activeChannelId: id, realtimeMessages: [] }),
+    set({ activeChannelId: id, realtimeMessages: [], replyToMessage: null }),
 
   // Sidebar
   sidebarOpen: true,
