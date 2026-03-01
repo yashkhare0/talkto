@@ -259,26 +259,42 @@ function createNewAgent(opts: {
     attempt++;
   } while (true);
 
-  // Create user
-  const userId = crypto.randomUUID();
-  db.insert(users)
-    .values({ id: userId, name: agentName, type: "agent", createdAt: now })
-    .run();
+  // Create user + agent (retry on UNIQUE collision from concurrent registrations)
+  let userId = crypto.randomUUID();
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      db.insert(users)
+        .values({ id: userId, name: agentName, type: "agent", createdAt: now })
+        .run();
 
-  // Create agent (scoped to workspace)
-  db.insert(agents)
-    .values({
-      id: userId,
-      agentName,
-      agentType: opts.agentType,
-      projectPath: opts.projectPath,
-      projectName,
-      status: "online",
-      serverUrl: opts.serverUrl,
-      providerSessionId: opts.sessionId,
-      workspaceId,
-    })
-    .run();
+      db.insert(agents)
+        .values({
+          id: userId,
+          agentName,
+          agentType: opts.agentType,
+          projectPath: opts.projectPath,
+          projectName,
+          status: "online",
+          serverUrl: opts.serverUrl,
+          providerSessionId: opts.sessionId,
+          workspaceId,
+        })
+        .run();
+      break; // Success
+    } catch (err: unknown) {
+      // UNIQUE constraint violation — regenerate name and retry
+      if (err instanceof Error && err.message.includes("UNIQUE")) {
+        retries--;
+        agentName = generateUniqueName(projectName, opts.agentType, attempt++);
+        userId = crypto.randomUUID();
+        // Clean up partial user insert if agent insert failed
+        db.delete(users).where(eq(users.id, userId)).run();
+        continue;
+      }
+      throw err; // Re-throw non-UNIQUE errors
+    }
+  }
 
   // Ensure project channel exists (scoped to workspace)
   let channel = db
@@ -399,7 +415,7 @@ export function disconnectAgent(agentName: string): Record<string, unknown> {
   return { status: "disconnected", agent_name: agentName };
 }
 
-/** Update agent's last heartbeat */
+/** Update agent's last heartbeat — touches both sessions and agents table */
 export function heartbeatAgent(agentName: string): Record<string, unknown> {
   const db = getDb();
   const now = new Date().toISOString();
@@ -407,10 +423,19 @@ export function heartbeatAgent(agentName: string): Record<string, unknown> {
   const agent = db.select().from(agents).where(eq(agents.agentName, agentName)).get();
   if (!agent) return { error: `Agent '${agentName}' not found.` };
 
+  // Update session heartbeat
   db.update(sessions)
     .set({ lastHeartbeat: now })
     .where(and(eq(sessions.agentId, agent.id), eq(sessions.isActive, 1)))
     .run();
+
+  // Also ensure agent status is online (heartbeat implies alive)
+  if (agent.status !== "online") {
+    db.update(agents)
+      .set({ status: "online" })
+      .where(eq(agents.id, agent.id))
+      .run();
+  }
 
   return { status: "ok", agent_name: agentName };
 }

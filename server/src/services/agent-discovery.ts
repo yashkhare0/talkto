@@ -106,7 +106,8 @@ export async function getAgentInvocationInfo(
 }
 
 /**
- * Clear server_url and provider_session_id for an agent with a dead session.
+ * Clear server_url and provider_session_id for an agent with a dead session,
+ * and mark the agent as offline (ghost).
  */
 export function clearStaleCredentials(agentName: string): void {
   const db = getDb();
@@ -118,11 +119,11 @@ export function clearStaleCredentials(agentName: string): void {
 
   if (agent) {
     db.update(agents)
-      .set({ serverUrl: null, providerSessionId: null })
+      .set({ serverUrl: null, providerSessionId: null, status: "offline" })
       .where(eq(agents.id, agent.id))
       .run();
     console.log(
-      `[DISCOVERY] Cleared stale credentials for '${agentName}'`
+      `[DISCOVERY] Cleared stale credentials for '${agentName}' — marked offline`
     );
   }
 }

@@ -39,13 +39,44 @@ class PromptEngine {
       }
     );
 
-    // Handle Jinja2 {% if var %} ... {% endif %} blocks
+    // Handle Jinja2 {% if var %} ... {% else %} ... {% endif %} blocks
+    // Supports: {% if X %}, {% if X or Y %}, {% if X and Y %}
     content = content.replace(
-      /\{%[-\s]*if\s+(\w+)\s*[-]?%\}([\s\S]*?)\{%[-\s]*endif\s*[-]?%\}/g,
-      (_match, varName: string, block: string) => {
-        const value = vars[varName];
-        if (value && value.trim() !== "") {
-          return block;
+      /\{%[-\s]*if\s+([\w\s]+?(?:\s+or\s+[\w\s]+?)*(?:\s+and\s+[\w\s]+?)*)\s*[-]?%\}([\s\S]*?)\{%[-\s]*endif\s*[-]?%\}/g,
+      (_match, condition: string, block: string) => {
+        // Evaluate the condition (supports "or" and "and")
+        let truthy: boolean;
+        if (condition.includes(" or ")) {
+          truthy = condition.split(/\s+or\s+/).some(
+            (v: string) => { const val = vars[v.trim()]; return val !== undefined && val.trim() !== ""; }
+          );
+        } else if (condition.includes(" and ")) {
+          truthy = condition.split(/\s+and\s+/).every(
+            (v: string) => { const val = vars[v.trim()]; return val !== undefined && val.trim() !== ""; }
+          );
+        } else {
+          const val = vars[condition.trim()];
+          truthy = val !== undefined && val.trim() !== "";
+        }
+
+        // Split on {% else %} if present
+        const elseParts = block.split(/\{%[-\s]*else\s*[-]?%\}/);
+        if (truthy) {
+          return elseParts[0];
+        }
+        return elseParts[1] ?? "";
+      }
+    );
+
+    // Replace {{ variable or variable }} with fallback support
+    // e.g., {{ display_name or name }} → first non-empty value
+    content = content.replace(
+      /\{\{\s*([\w]+(?:\s+or\s+[\w]+)+)\s*\}\}/g,
+      (_match, expr: string) => {
+        const parts = expr.split(/\s+or\s+/);
+        for (const part of parts) {
+          const val = vars[part.trim()];
+          if (val !== undefined && val.trim() !== "") return val;
         }
         return "";
       }

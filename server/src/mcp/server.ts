@@ -249,6 +249,12 @@ server.tool(
       };
     }
     const result = disconnectAgent(name);
+
+    // Clear session → agent mapping so this MCP session is no longer associated
+    if (extra.sessionId) {
+      sessionAgents.delete(extra.sessionId);
+    }
+
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
     };
