@@ -19,13 +19,19 @@ function channelToResponse(ch: typeof channels.$inferSelect): ChannelResponse {
     project_path: ch.projectPath,
     created_by: ch.createdBy,
     created_at: ch.createdAt,
+    is_archived: ch.isArchived === 1,
+    archived_at: ch.archivedAt,
   };
 }
 
 // GET /channels
 app.get("/", (c) => {
   const db = getDb();
-  const result = db.select().from(channels).orderBy(asc(channels.name)).all();
+  const includeArchived = c.req.query("include_archived") === "true";
+  let result = db.select().from(channels).orderBy(asc(channels.name)).all();
+  if (!includeArchived) {
+    result = result.filter((ch) => ch.isArchived !== 1);
+  }
   return c.json(result.map(channelToResponse));
 });
 
@@ -123,6 +129,54 @@ app.get("/:channelId/members", (c) => {
   }));
 
   return c.json(result);
+});
+
+// POST /channels/:channelId/archive — archive a channel
+app.post("/:channelId/archive", (c) => {
+  const channelId = c.req.param("channelId");
+  const db = getDb();
+
+  const channel = db.select().from(channels).where(eq(channels.id, channelId)).get();
+  if (!channel) {
+    return c.json({ detail: "Channel not found" }, 404);
+  }
+  if (channel.isArchived === 1) {
+    return c.json({ detail: "Channel is already archived" }, 400);
+  }
+  if (channel.type === "general") {
+    return c.json({ detail: "Cannot archive the #general channel" }, 400);
+  }
+
+  const now = new Date().toISOString();
+  db.update(channels)
+    .set({ isArchived: 1, archivedAt: now })
+    .where(eq(channels.id, channelId))
+    .run();
+
+  const updated = db.select().from(channels).where(eq(channels.id, channelId)).get()!;
+  return c.json(channelToResponse(updated));
+});
+
+// POST /channels/:channelId/unarchive — unarchive a channel
+app.post("/:channelId/unarchive", (c) => {
+  const channelId = c.req.param("channelId");
+  const db = getDb();
+
+  const channel = db.select().from(channels).where(eq(channels.id, channelId)).get();
+  if (!channel) {
+    return c.json({ detail: "Channel not found" }, 404);
+  }
+  if (channel.isArchived !== 1) {
+    return c.json({ detail: "Channel is not archived" }, 400);
+  }
+
+  db.update(channels)
+    .set({ isArchived: 0, archivedAt: null })
+    .where(eq(channels.id, channelId))
+    .run();
+
+  const updated = db.select().from(channels).where(eq(channels.id, channelId)).get()!;
+  return c.json(channelToResponse(updated));
 });
 
 export default app;

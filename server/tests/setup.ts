@@ -58,7 +58,9 @@ export function createTestDb(): TestDb {
     type TEXT NOT NULL,
     project_path TEXT,
     created_by TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT
   )`);
 
   db.run(sql`CREATE TABLE IF NOT EXISTS channel_members (

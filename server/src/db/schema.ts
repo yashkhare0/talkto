@@ -108,6 +108,8 @@ export const channels = sqliteTable(
     projectPath: text("project_path"),
     createdBy: text("created_by").notNull(), // user UUID or "system" — NOT a FK
     createdAt: text("created_at").notNull(),
+    isArchived: integer("is_archived").notNull().default(0),
+    archivedAt: text("archived_at"),
   },
   (table) => [index("idx_channels_name").on(table.name)]
 );
