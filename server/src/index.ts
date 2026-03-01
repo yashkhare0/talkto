@@ -53,6 +53,16 @@ console.log(`[DB] Database initialized at ${config.dbPath}`);
 
 const app = new Hono<AppBindings>();
 
+// Global error handler — catches JSON parse errors and other unhandled exceptions
+app.onError((err, c) => {
+  // Hono throws SyntaxError when c.req.json() receives malformed JSON
+  if (err instanceof SyntaxError && err.message.includes("JSON")) {
+    return c.json({ detail: "Invalid JSON body" }, 400);
+  }
+  console.error("[ERROR] Unhandled:", err);
+  return c.json({ detail: "Internal server error" }, 500);
+});
+
 // Middleware
 app.use("*", logger());
 app.use(

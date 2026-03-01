@@ -14,6 +14,15 @@ import { and } from "drizzle-orm";
 
 const app = new Hono<AppBindings>();
 
+/** Safely parse JSON body, returning null on malformed input */
+async function safeJsonBody(c: { req: { json: () => Promise<unknown> } }): Promise<unknown | null> {
+  try {
+    return await c.req.json();
+  } catch {
+    return null;
+  }
+}
+
 // GET /channels/:channelId/messages
 app.get("/", (c) => {
   const channelId = c.req.param("channelId");
@@ -130,7 +139,8 @@ app.get("/", (c) => {
 app.post("/", async (c) => {
   const auth = c.get("auth");
   const channelId = c.req.param("channelId");
-  const body = await c.req.json();
+  const body = await safeJsonBody(c);
+  if (body === null) return c.json({ detail: "Invalid JSON body" }, 400);
   const parsed = MessageCreateSchema.safeParse(body);
   if (!parsed.success) {
     return c.json({ detail: parsed.error.message }, 400);
@@ -216,7 +226,7 @@ app.post("/", async (c) => {
     sender_type: "human",
     content: parsed.data.content,
     mentions: parsed.data.mentions ?? null,
-    parent_id: null,
+    parent_id: parentId,
     is_pinned: false,
     created_at: now,
   };
@@ -300,9 +310,11 @@ app.get("/pinned", (c) => {
 
 // PATCH /channels/:channelId/messages/:messageId — edit message content
 app.patch("/:messageId", async (c) => {
+  const auth = c.get("auth");
   const channelId = c.req.param("channelId");
   const messageId = c.req.param("messageId");
-  const body = await c.req.json();
+  const body = await safeJsonBody(c);
+  if (body === null) return c.json({ detail: "Invalid JSON body" }, 400);
   const parsed = MessageEditSchema.safeParse(body);
   if (!parsed.success) {
     return c.json({ detail: parsed.error.message }, 400);
@@ -312,6 +324,11 @@ app.patch("/:messageId", async (c) => {
   const msg = db.select().from(messages).where(eq(messages.id, messageId)).get();
   if (!msg) return c.json({ detail: "Message not found" }, 404);
   if (msg.channelId !== channelId) return c.json({ detail: "Message does not belong to this channel" }, 400);
+
+  // Ownership check: only the sender can edit their message
+  if (auth.userId && msg.senderId !== auth.userId) {
+    return c.json({ detail: "You can only edit your own messages" }, 403);
+  }
 
   const editedAt = new Date().toISOString();
   db.update(messages)
@@ -326,6 +343,7 @@ app.patch("/:messageId", async (c) => {
 
 // DELETE /channels/:channelId/messages/:messageId
 app.delete("/:messageId", (c) => {
+  const auth = c.get("auth");
   const channelId = c.req.param("channelId");
   const messageId = c.req.param("messageId");
   const db = getDb();
@@ -349,6 +367,11 @@ app.delete("/:messageId", (c) => {
     return c.json({ detail: "Message does not belong to this channel" }, 400);
   }
 
+  // Ownership check: only the sender can delete their message
+  if (auth.userId && msg.senderId !== auth.userId) {
+    return c.json({ detail: "You can only delete your own messages" }, 403);
+  }
+
   // Delete the message
   db.delete(messages).where(eq(messages.id, messageId)).run();
 
@@ -362,7 +385,8 @@ app.delete("/:messageId", (c) => {
 app.post("/:messageId/react", async (c) => {
   const channelId = c.req.param("channelId");
   const messageId = c.req.param("messageId");
-  const body = await c.req.json();
+  const body = await safeJsonBody(c);
+  if (body === null) return c.json({ detail: "Invalid JSON body" }, 400);
   const parsed = ReactionToggleSchema.safeParse(body);
   if (!parsed.success) {
     return c.json({ detail: parsed.error.message }, 400);
