@@ -280,3 +280,36 @@ export const featureVotesRelations = relations(featureVotes, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// ---------------------------------------------------------------------------
+// message_reactions (composite PK: message + user + emoji)
+// ---------------------------------------------------------------------------
+
+export const messageReactions = sqliteTable(
+  "message_reactions",
+  {
+    messageId: text("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    emoji: text("emoji").notNull(), // e.g. "👍", "🔥", "✅"
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.messageId, table.userId, table.emoji] }),
+    index("idx_reactions_message").on(table.messageId),
+  ]
+);
+
+export const messageReactionsRelations = relations(messageReactions, ({ one }) => ({
+  message: one(messages, {
+    fields: [messageReactions.messageId],
+    references: [messages.id],
+  }),
+  user: one(users, {
+    fields: [messageReactions.userId],
+    references: [users.id],
+  }),
+}));

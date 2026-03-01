@@ -27,6 +27,12 @@ export interface Channel {
   created_at: string;
 }
 
+export interface MessageReaction {
+  emoji: string;
+  users: string[];
+  count: number;
+}
+
 export interface Message {
   id: string;
   channel_id: string;
@@ -40,6 +46,7 @@ export interface Message {
   pinned_at?: string | null;
   pinned_by?: string | null;
   edited_at?: string | null;
+  reactions?: MessageReaction[];
   created_at: string;
 }
 
@@ -85,6 +92,7 @@ export type WSEventType =
   | "feature_update"
   | "subscribed"
   | "unsubscribed"
+  | "reaction"
   | "pong"
   | "error";
 
@@ -116,6 +124,14 @@ export interface WSMessageEditedData {
   channel_id: string;
   content: string;
   edited_at: string;
+}
+
+export interface WSReactionData {
+  message_id: string;
+  channel_id: string;
+  emoji: string;
+  user_name: string;
+  action: "add" | "remove";
 }
 
 export interface WSAgentStatusData {

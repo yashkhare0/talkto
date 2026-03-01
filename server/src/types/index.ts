@@ -156,3 +156,27 @@ export interface FeatureResponse {
   updated_at?: string | null;
   vote_count: number;
 }
+
+// ---------------------------------------------------------------------------
+// Reaction
+// ---------------------------------------------------------------------------
+
+export const ReactionToggleSchema = z.object({
+  emoji: z.string().min(1).max(32),
+});
+export type ReactionToggle = z.infer<typeof ReactionToggleSchema>;
+
+export interface ReactionResponse {
+  message_id: string;
+  emoji: string;
+  users: string[]; // user names
+  count: number;
+}
+
+export interface ReactionEvent {
+  message_id: string;
+  channel_id: string;
+  emoji: string;
+  user_name: string;
+  action: "add" | "remove";
+}

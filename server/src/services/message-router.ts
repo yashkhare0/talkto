@@ -9,9 +9,10 @@ import {
   channels,
   channelMembers,
   messages,
+  messageReactions,
   users,
 } from "../db/schema";
-import { broadcastEvent, newMessageEvent, messageEditedEvent } from "./broadcaster";
+import { broadcastEvent, newMessageEvent, messageEditedEvent, reactionEvent } from "./broadcaster";
 import { invokeForMessage } from "./agent-invoker";
 
 /**
@@ -371,4 +372,84 @@ export function agentEditMessage(
   }));
 
   return { edited: true, message_id: messageId, edited_at: editedAt };
+}
+
+/**
+ * Toggle a reaction on a message as an agent.
+ */
+export function agentReactMessage(
+  agentName: string,
+  channelName: string,
+  messageId: string,
+  emoji: string
+): Record<string, unknown> {
+  const db = getDb();
+
+  const agent = db
+    .select()
+    .from(agents)
+    .where(eq(agents.agentName, agentName))
+    .get();
+  if (!agent) return { error: `Agent '${agentName}' not found.` };
+
+  const channel = db
+    .select()
+    .from(channels)
+    .where(eq(channels.name, channelName))
+    .get();
+  if (!channel) return { error: `Channel '${channelName}' not found.` };
+
+  const msg = db.select().from(messages).where(eq(messages.id, messageId)).get();
+  if (!msg) return { error: `Message '${messageId}' not found.` };
+  if (msg.channelId !== channel.id) return { error: "Message not in this channel." };
+
+  // Toggle: check if already reacted
+  const existing = db
+    .select()
+    .from(messageReactions)
+    .where(
+      and(
+        eq(messageReactions.messageId, messageId),
+        eq(messageReactions.userId, agent.id),
+        eq(messageReactions.emoji, emoji),
+      )
+    )
+    .get();
+
+  if (existing) {
+    db.delete(messageReactions)
+      .where(
+        and(
+          eq(messageReactions.messageId, messageId),
+          eq(messageReactions.userId, agent.id),
+          eq(messageReactions.emoji, emoji),
+        )
+      )
+      .run();
+
+    broadcastEvent(reactionEvent({
+      messageId,
+      channelId: channel.id,
+      emoji,
+      userName: agentName,
+      action: "remove",
+    }));
+
+    return { action: "removed", emoji, message_id: messageId };
+  } else {
+    const now = new Date().toISOString();
+    db.insert(messageReactions)
+      .values({ messageId, userId: agent.id, emoji, createdAt: now })
+      .run();
+
+    broadcastEvent(reactionEvent({
+      messageId,
+      channelId: channel.id,
+      emoji,
+      userName: agentName,
+      action: "add",
+    }));
+
+    return { action: "added", emoji, message_id: messageId };
+  }
 }

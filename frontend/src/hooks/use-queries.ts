@@ -137,35 +137,6 @@ export function useVoteFeature() {
   });
 }
 
-export function useUpdateFeature() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      featureId,
-      status,
-      reason,
-    }: {
-      featureId: string;
-      status: string;
-      reason?: string;
-    }) => api.updateFeature(featureId, status, reason),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["features"] });
-    },
-  });
-}
-
-export function useDeleteFeature() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ featureId }: { featureId: string }) =>
-      api.deleteFeature(featureId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["features"] });
-    },
-  });
-}
-
 // ── Send Message ───────────────────────────────────────
 
 export function useSendMessage() {
@@ -198,6 +169,22 @@ export function useEditMessage() {
       messageId: string;
       content: string;
     }) => api.editMessage(channelId, messageId, content),
+  });
+}
+
+// ── React to Message ───────────────────────────────────
+
+export function useReactToMessage() {
+  return useMutation({
+    mutationFn: ({
+      channelId,
+      messageId,
+      emoji,
+    }: {
+      channelId: string;
+      messageId: string;
+      emoji: string;
+    }) => api.reactToMessage(channelId, messageId, emoji),
   });
 }
 

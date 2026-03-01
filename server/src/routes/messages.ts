@@ -5,11 +5,12 @@
 import { Hono } from "hono";
 import { eq, desc, lt, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { channels, messages, users } from "../db/schema";
-import { MessageCreateSchema, MessageEditSchema } from "../types";
-import { broadcastEvent, newMessageEvent, messageDeletedEvent, messageEditedEvent } from "../services/broadcaster";
+import { channels, messages, users, messageReactions } from "../db/schema";
+import { MessageCreateSchema, MessageEditSchema, ReactionToggleSchema } from "../types";
+import { broadcastEvent, newMessageEvent, messageDeletedEvent, messageEditedEvent, reactionEvent } from "../services/broadcaster";
 import { invokeForMessage } from "../services/agent-invoker";
 import type { MessageResponse } from "../types";
+import { and } from "drizzle-orm";
 
 const app = new Hono();
 
@@ -65,21 +66,60 @@ app.get("/", (c) => {
     .limit(limit)
     .all();
 
-  const result: MessageResponse[] = rows.map((row) => ({
-    id: row.id,
-    channel_id: row.channelId,
-    sender_id: row.senderId,
-    sender_name: row.senderName,
-    sender_type: row.senderType,
-    content: row.content,
-    mentions: row.mentions ? JSON.parse(row.mentions) : null,
-    parent_id: row.parentId,
-    is_pinned: Boolean(row.isPinned),
-    pinned_at: row.pinnedAt,
-    pinned_by: row.pinnedBy,
-    edited_at: row.editedAt,
-    created_at: row.createdAt,
-  }));
+  // Fetch reactions for all messages in one query
+  const messageIds = rows.map((r) => r.id);
+  const allReactions = messageIds.length > 0
+    ? db
+        .select({
+          messageId: messageReactions.messageId,
+          emoji: messageReactions.emoji,
+          userName: sql<string>`coalesce(${users.displayName}, ${users.name})`,
+        })
+        .from(messageReactions)
+        .innerJoin(users, eq(messageReactions.userId, users.id))
+        .where(sql`${messageReactions.messageId} IN (${sql.join(messageIds.map(id => sql`${id}`), sql`, `)})`)
+        .all()
+    : [];
+
+  // Group reactions by message ID
+  const reactionsByMessage = new Map<string, Map<string, string[]>>();
+  for (const r of allReactions) {
+    if (!reactionsByMessage.has(r.messageId)) {
+      reactionsByMessage.set(r.messageId, new Map());
+    }
+    const emojiMap = reactionsByMessage.get(r.messageId)!;
+    const userList = emojiMap.get(r.emoji) ?? [];
+    userList.push(r.userName);
+    emojiMap.set(r.emoji, userList);
+  }
+
+  const result: MessageResponse[] = rows.map((row) => {
+    const emojiMap = reactionsByMessage.get(row.id);
+    const reactions = emojiMap
+      ? Array.from(emojiMap.entries()).map(([emoji, userNames]) => ({
+          emoji,
+          users: userNames,
+          count: userNames.length,
+        }))
+      : [];
+
+    return {
+      id: row.id,
+      channel_id: row.channelId,
+      sender_id: row.senderId,
+      sender_name: row.senderName,
+      sender_type: row.senderType,
+      content: row.content,
+      mentions: row.mentions ? JSON.parse(row.mentions) : null,
+      parent_id: row.parentId,
+      is_pinned: Boolean(row.isPinned),
+      pinned_at: row.pinnedAt,
+      pinned_by: row.pinnedBy,
+      edited_at: row.editedAt,
+      reactions,
+      created_at: row.createdAt,
+    };
+  });
 
   return c.json(result);
 });
@@ -311,6 +351,101 @@ app.delete("/:messageId", (c) => {
   broadcastEvent(messageDeletedEvent({ messageId, channelId }));
 
   return c.json({ deleted: true, id: messageId });
+});
+
+// POST /channels/:channelId/messages/:messageId/react — toggle reaction
+app.post("/:messageId/react", async (c) => {
+  const channelId = c.req.param("channelId");
+  const messageId = c.req.param("messageId");
+  const body = await c.req.json();
+  const parsed = ReactionToggleSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ detail: parsed.error.message }, 400);
+  }
+  const db = getDb();
+
+  // Verify message exists and belongs to channel
+  const msg = db.select().from(messages).where(eq(messages.id, messageId)).get();
+  if (!msg) return c.json({ detail: "Message not found" }, 404);
+  if (msg.channelId !== channelId) return c.json({ detail: "Message does not belong to this channel" }, 400);
+
+  // Get human user
+  const human = db.select().from(users).where(eq(users.type, "human")).get();
+  if (!human) return c.json({ detail: "No user onboarded" }, 400);
+
+  const userName = human.displayName ?? human.name;
+  const emoji = parsed.data.emoji;
+
+  // Check if reaction already exists — toggle
+  const existing = db
+    .select()
+    .from(messageReactions)
+    .where(
+      and(
+        eq(messageReactions.messageId, messageId),
+        eq(messageReactions.userId, human.id),
+        eq(messageReactions.emoji, emoji),
+      )
+    )
+    .get();
+
+  if (existing) {
+    // Remove reaction
+    db.delete(messageReactions)
+      .where(
+        and(
+          eq(messageReactions.messageId, messageId),
+          eq(messageReactions.userId, human.id),
+          eq(messageReactions.emoji, emoji),
+        )
+      )
+      .run();
+
+    broadcastEvent(reactionEvent({ messageId, channelId, emoji, userName, action: "remove" }));
+    return c.json({ action: "removed", emoji });
+  } else {
+    // Add reaction
+    const now = new Date().toISOString();
+    db.insert(messageReactions)
+      .values({ messageId, userId: human.id, emoji, createdAt: now })
+      .run();
+
+    broadcastEvent(reactionEvent({ messageId, channelId, emoji, userName, action: "add" }));
+    return c.json({ action: "added", emoji });
+  }
+});
+
+// GET /channels/:channelId/messages/:messageId/reactions — get reactions for a message
+app.get("/:messageId/reactions", (c) => {
+  const messageId = c.req.param("messageId");
+  const db = getDb();
+
+  const rows = db
+    .select({
+      emoji: messageReactions.emoji,
+      userName: sql<string>`coalesce(${users.displayName}, ${users.name})`,
+    })
+    .from(messageReactions)
+    .innerJoin(users, eq(messageReactions.userId, users.id))
+    .where(eq(messageReactions.messageId, messageId))
+    .all();
+
+  // Group by emoji
+  const grouped = new Map<string, string[]>();
+  for (const row of rows) {
+    const list = grouped.get(row.emoji) ?? [];
+    list.push(row.userName);
+    grouped.set(row.emoji, list);
+  }
+
+  const result = Array.from(grouped.entries()).map(([emoji, userNames]) => ({
+    message_id: messageId,
+    emoji,
+    users: userNames,
+    count: userNames.length,
+  }));
+
+  return c.json(result);
 });
 
 export default app;

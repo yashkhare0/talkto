@@ -114,6 +114,15 @@ export function useWebSocket(enabled: boolean = true) {
           break;
         }
 
+        case "reaction": {
+          // Invalidate messages to refetch with updated reactions
+          const reaction = event.data as { channel_id: string };
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.messages(reaction.channel_id),
+          });
+          break;
+        }
+
         case "channel_created": {
           queryClient.invalidateQueries({ queryKey: queryKeys.channels });
           break;

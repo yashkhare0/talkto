@@ -1,6 +1,6 @@
 /** Individual message bubble — lazy-loads markdown renderer for rich content. */
 import type { Message } from "@/lib/types";
-import { Bot, User, Trash2, Pin, Pencil, Check, X, Reply } from "lucide-react";
+import { Bot, User, Trash2, Pin, Pencil, Check, X, Reply, SmilePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isPlainText, formatTime } from "@/lib/message-utils";
 import { highlightMentions } from "@/lib/highlight-mentions";
@@ -11,6 +11,9 @@ const MarkdownRenderer = lazy(
   () => import("@/components/workspace/markdown-renderer"),
 );
 
+// Quick-react emoji palette — most common reactions
+const QUICK_EMOJIS = ["👍", "❤️", "🔥", "👀", "✅", "🎉", "😂", "🤔"];
+
 interface MessageBubbleProps {
   message: Message;
   parentMessage?: Message | null;
@@ -20,6 +23,7 @@ interface MessageBubbleProps {
   onPin?: (messageId: string) => void;
   onEdit?: (messageId: string, content: string) => void;
   onReply?: (message: Message) => void;
+  onReact?: (messageId: string, emoji: string) => void;
 }
 
 export function MessageBubble({
@@ -31,12 +35,14 @@ export function MessageBubble({
   onPin,
   onEdit,
   onReply,
+  onReact,
 }: MessageBubbleProps) {
   const isAgent = message.sender_type === "agent";
   const time = formatTime(message.created_at);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const editRef = useRef<HTMLTextAreaElement>(null);
+  const [showPicker, setShowPicker] = useState(false);
 
   useEffect(() => {
     if (editing && editRef.current) {
@@ -78,6 +84,35 @@ export function MessageBubble({
             >
               <Reply className="h-3.5 w-3.5" />
             </button>
+          )}
+          {onReact && (
+            <div className="relative">
+              <button
+                onClick={() => setShowPicker((v) => !v)}
+                className="rounded p-1 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/50 hover:!text-primary"
+                title="React to message"
+              >
+                <SmilePlus className="h-3.5 w-3.5" />
+              </button>
+              {/* Emoji picker dropdown */}
+              {showPicker && (
+                <div className="absolute right-0 top-full z-50 mt-1 flex gap-0.5 rounded-lg border border-border bg-popover p-1.5 shadow-lg animate-in fade-in slide-in-from-top-1 duration-100">
+                  {QUICK_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className="rounded p-1 text-base hover:bg-accent transition-colors"
+                      onClick={() => {
+                        onReact(message.id, emoji);
+                        setShowPicker(false);
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           {onPin && (
             <button
@@ -216,6 +251,27 @@ export function MessageBubble({
           />
         )}
       </div>
+
+      {/* Reactions bar */}
+      {message.reactions && message.reactions.length > 0 && (
+        <div className="pl-10 mt-1 flex flex-wrap gap-1">
+          {message.reactions.map((reaction) => (
+            <button
+              key={reaction.emoji}
+              type="button"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
+                "border-border/60 bg-muted/30 hover:bg-accent hover:border-primary/30",
+              )}
+              title={reaction.users.join(", ")}
+              onClick={() => onReact?.(message.id, reaction.emoji)}
+            >
+              <span>{reaction.emoji}</span>
+              <span className="text-muted-foreground/70 font-medium">{reaction.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Hover timestamp (when sender line is hidden) */}
       {!showSender && (

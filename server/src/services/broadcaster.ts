@@ -160,6 +160,25 @@ export function featureUpdateEvent(opts: {
   };
 }
 
+export function reactionEvent(opts: {
+  messageId: string;
+  channelId: string;
+  emoji: string;
+  userName: string;
+  action: "add" | "remove";
+}): WsEvent {
+  return {
+    type: "reaction",
+    data: {
+      message_id: opts.messageId,
+      channel_id: opts.channelId,
+      emoji: opts.emoji,
+      user_name: opts.userName,
+      action: opts.action,
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Broadcast helper
 // ---------------------------------------------------------------------------
