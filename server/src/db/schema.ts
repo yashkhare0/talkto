@@ -170,6 +170,7 @@ export const messages = sqliteTable(
     isPinned: integer("is_pinned").notNull().default(0),
     pinnedAt: text("pinned_at"),
     pinnedBy: text("pinned_by"),
+    editedAt: text("edited_at"),
     createdAt: text("created_at").notNull(),
   },
   (table) => [

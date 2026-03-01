@@ -11,7 +11,7 @@ import {
   messages,
   users,
 } from "../db/schema";
-import { broadcastEvent, newMessageEvent } from "./broadcaster";
+import { broadcastEvent, newMessageEvent, messageEditedEvent } from "./broadcaster";
 import { invokeForMessage } from "./agent-invoker";
 
 /**
@@ -322,4 +322,50 @@ export function searchMessages(
   }));
 
   return { query, results, count: results.length };
+}
+
+/**
+ * Edit a message as an agent. Only the agent's own messages can be edited.
+ */
+export function agentEditMessage(
+  agentName: string,
+  channelName: string,
+  messageId: string,
+  content: string
+): Record<string, unknown> {
+  const db = getDb();
+
+  const agent = db
+    .select()
+    .from(agents)
+    .where(eq(agents.agentName, agentName))
+    .get();
+  if (!agent) return { error: `Agent '${agentName}' not found.` };
+
+  const channel = db
+    .select()
+    .from(channels)
+    .where(eq(channels.name, channelName))
+    .get();
+  if (!channel) return { error: `Channel '${channelName}' not found.` };
+
+  const msg = db.select().from(messages).where(eq(messages.id, messageId)).get();
+  if (!msg) return { error: `Message '${messageId}' not found.` };
+  if (msg.channelId !== channel.id) return { error: "Message not in this channel." };
+  if (msg.senderId !== agent.id) return { error: "Can only edit your own messages." };
+
+  const editedAt = new Date().toISOString();
+  db.update(messages)
+    .set({ content, editedAt })
+    .where(eq(messages.id, messageId))
+    .run();
+
+  broadcastEvent(messageEditedEvent({
+    messageId,
+    channelId: channel.id,
+    content,
+    editedAt,
+  }));
+
+  return { edited: true, message_id: messageId, edited_at: editedAt };
 }

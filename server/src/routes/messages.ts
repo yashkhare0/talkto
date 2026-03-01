@@ -6,8 +6,8 @@ import { Hono } from "hono";
 import { eq, desc, lt, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { channels, messages, users } from "../db/schema";
-import { MessageCreateSchema } from "../types";
-import { broadcastEvent, newMessageEvent, messageDeletedEvent } from "../services/broadcaster";
+import { MessageCreateSchema, MessageEditSchema } from "../types";
+import { broadcastEvent, newMessageEvent, messageDeletedEvent, messageEditedEvent } from "../services/broadcaster";
 import { invokeForMessage } from "../services/agent-invoker";
 import type { MessageResponse } from "../types";
 
@@ -40,6 +40,7 @@ app.get("/", (c) => {
       isPinned: messages.isPinned,
       pinnedAt: messages.pinnedAt,
       pinnedBy: messages.pinnedBy,
+      editedAt: messages.editedAt,
       createdAt: messages.createdAt,
     })
     .from(messages)
@@ -76,6 +77,7 @@ app.get("/", (c) => {
     is_pinned: Boolean(row.isPinned),
     pinned_at: row.pinnedAt,
     pinned_by: row.pinnedBy,
+    edited_at: row.editedAt,
     created_at: row.createdAt,
   }));
 
@@ -229,6 +231,32 @@ app.get("/pinned", (c) => {
     pinned_by: row.pinnedBy,
     created_at: row.createdAt,
   })));
+});
+
+// PATCH /channels/:channelId/messages/:messageId — edit message content
+app.patch("/:messageId", async (c) => {
+  const channelId = c.req.param("channelId");
+  const messageId = c.req.param("messageId");
+  const body = await c.req.json();
+  const parsed = MessageEditSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ detail: parsed.error.message }, 400);
+  }
+  const db = getDb();
+
+  const msg = db.select().from(messages).where(eq(messages.id, messageId)).get();
+  if (!msg) return c.json({ detail: "Message not found" }, 404);
+  if (msg.channelId !== channelId) return c.json({ detail: "Message does not belong to this channel" }, 400);
+
+  const editedAt = new Date().toISOString();
+  db.update(messages)
+    .set({ content: parsed.data.content, editedAt })
+    .where(eq(messages.id, messageId))
+    .run();
+
+  broadcastEvent(messageEditedEvent({ messageId, channelId, content: parsed.data.content, editedAt }));
+
+  return c.json({ id: messageId, content: parsed.data.content, edited_at: editedAt });
 });
 
 // DELETE /channels/:channelId/messages/:messageId

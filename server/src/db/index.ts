@@ -121,6 +121,7 @@ function createTables(sqlite: Database) {
       is_pinned INTEGER NOT NULL DEFAULT 0,
       pinned_at TEXT,
       pinned_by TEXT,
+      edited_at TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -179,6 +180,11 @@ function migrateUp(sqlite: Database) {
     sqlite.exec("ALTER TABLE messages ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0");
     sqlite.exec("ALTER TABLE messages ADD COLUMN pinned_at TEXT");
     sqlite.exec("ALTER TABLE messages ADD COLUMN pinned_by TEXT");
+  }
+
+  // Migration: add edited_at column to messages
+  if (!hasColumn("messages", "edited_at")) {
+    sqlite.exec("ALTER TABLE messages ADD COLUMN edited_at TEXT");
   }
 
   // Migration: add topic column to channels

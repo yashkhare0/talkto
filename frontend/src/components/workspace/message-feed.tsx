@@ -1,6 +1,6 @@
 /** Message feed — displays messages for the active channel. */
 import { useEffect, useRef, useMemo, useCallback, lazy, Suspense } from "react";
-import { useMessages, useMe, useDeleteMessage, usePinMessage } from "@/hooks/use-queries";
+import { useMessages, useMe, useDeleteMessage, usePinMessage, useEditMessage } from "@/hooks/use-queries";
 import { useAppStore } from "@/stores/app-store";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,6 +25,7 @@ export function MessageFeed() {
   const { data: me } = useMe();
   const deleteMessage = useDeleteMessage();
   const pinMessage = usePinMessage();
+  const editMessage = useEditMessage();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Get typing agents for current channel
@@ -76,6 +77,15 @@ export function MessageFeed() {
       (a, b) => a.created_at.localeCompare(b.created_at),
     );
   }, [fetchedMessages, realtimeMessages, activeChannelId]);
+
+  // Edit handler
+  const handleEdit = useCallback(
+    (messageId: string, content: string) => {
+      if (!activeChannelId) return;
+      editMessage.mutate({ channelId: activeChannelId, messageId, content });
+    },
+    [activeChannelId, editMessage],
+  );
 
   // Delete handler
   const handleDelete = useCallback(
@@ -179,6 +189,7 @@ export function MessageFeed() {
                   showSender={showSender}
                   onDelete={handleDelete}
                   onPin={handlePin}
+                  onEdit={handleEdit}
                 />
               </div>
             );

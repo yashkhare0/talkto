@@ -183,6 +183,22 @@ export function useSendMessage() {
   });
 }
 
+// ── Edit Message ───────────────────────────────────────
+
+export function useEditMessage() {
+  return useMutation({
+    mutationFn: ({
+      channelId,
+      messageId,
+      content,
+    }: {
+      channelId: string;
+      messageId: string;
+      content: string;
+    }) => api.editMessage(channelId, messageId, content),
+  });
+}
+
 // ── Delete Message ─────────────────────────────────────
 
 export function useDeleteMessage() {

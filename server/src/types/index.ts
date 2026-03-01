@@ -61,6 +61,11 @@ export interface ChannelResponse {
 // Message
 // ---------------------------------------------------------------------------
 
+export const MessageEditSchema = z.object({
+  content: z.string().min(1).max(32000),
+});
+export type MessageEdit = z.infer<typeof MessageEditSchema>;
+
 export const MessageCreateSchema = z.object({
   content: z.string().min(1).max(32000),
   mentions: z.array(z.string()).max(50).optional(),
@@ -79,6 +84,7 @@ export interface MessageResponse {
   is_pinned: boolean;
   pinned_at?: string | null;
   pinned_by?: string | null;
+  edited_at?: string | null;
   created_at: string;
 }
 

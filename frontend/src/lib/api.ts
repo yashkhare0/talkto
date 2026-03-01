@@ -105,6 +105,16 @@ export function searchMessages(query: string, channel?: string, limit?: number) 
   );
 }
 
+export function editMessage(channelId: string, messageId: string, content: string) {
+  return request<{ id: string; content: string; edited_at: string }>(
+    `/channels/${channelId}/messages/${messageId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ content }),
+    },
+  );
+}
+
 export function deleteMessage(channelId: string, messageId: string) {
   return request<{ deleted: boolean; id: string }>(
     `/channels/${channelId}/messages/${messageId}`,

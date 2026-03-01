@@ -80,6 +80,7 @@ export function createTestDb(): TestDb {
     is_pinned INTEGER NOT NULL DEFAULT 0,
     pinned_at TEXT,
     pinned_by TEXT,
+    edited_at TEXT,
     created_at TEXT NOT NULL
   )`);
 

@@ -60,6 +60,7 @@ export function useWebSocket(enabled: boolean = true) {
             content: msg.content,
             mentions: msg.mentions,
             parent_id: msg.parent_id,
+            edited_at: null,
             created_at: msg.created_at,
           });
           // Clear typing indicator and streaming text when agent sends a message
@@ -78,6 +79,14 @@ export function useWebSocket(enabled: boolean = true) {
           removeRealtimeMessage(del.id);
           queryClient.invalidateQueries({
             queryKey: queryKeys.messages(del.channel_id),
+          });
+          break;
+        }
+
+        case "message_edited": {
+          const edited = event.data as { channel_id: string };
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.messages(edited.channel_id),
           });
           break;
         }

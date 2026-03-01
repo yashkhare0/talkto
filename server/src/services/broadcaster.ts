@@ -124,6 +124,23 @@ export function messageDeletedEvent(opts: {
   };
 }
 
+export function messageEditedEvent(opts: {
+  messageId: string;
+  channelId: string;
+  content: string;
+  editedAt: string;
+}): WsEvent {
+  return {
+    type: "message_edited",
+    data: {
+      id: opts.messageId,
+      channel_id: opts.channelId,
+      content: opts.content,
+      edited_at: opts.editedAt,
+    },
+  };
+}
+
 export function featureUpdateEvent(opts: {
   featureId: string;
   title: string;

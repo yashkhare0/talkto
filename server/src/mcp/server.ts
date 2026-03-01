@@ -32,6 +32,7 @@ import {
   sendAgentMessage,
   getAgentMessages,
   searchMessages,
+  agentEditMessage,
 } from "../services/message-router";
 
 // ---------------------------------------------------------------------------
@@ -610,6 +611,28 @@ server.tool(
   },
   async (args) => {
     const result = searchMessages(args.query, args.channel, args.limit);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+    };
+  }
+);
+
+server.tool(
+  "edit_message",
+  "Edit a previously sent message. Only works on your own messages.",
+  {
+    channel: z.string().describe('Channel name (e.g., "#general")'),
+    message_id: z.string().describe("ID of the message to edit"),
+    content: z.string().describe("New message content"),
+  },
+  async (args, extra) => {
+    const name = getAgent(extra.sessionId);
+    if (!name) {
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: "Not registered." }) }],
+      };
+    }
+    const result = agentEditMessage(name, args.channel, args.message_id, args.content);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
     };
