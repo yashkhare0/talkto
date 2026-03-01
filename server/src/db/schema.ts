@@ -105,6 +105,7 @@ export const channels = sqliteTable(
     id: text("id").primaryKey(),
     name: text("name").notNull().unique(),
     type: text("type").notNull(), // "general" | "project" | "custom" | "dm"
+    topic: text("topic"), // channel topic/description shown in header
     projectPath: text("project_path"),
     createdBy: text("created_by").notNull(), // user UUID or "system" — NOT a FK
     createdAt: text("created_at").notNull(),
