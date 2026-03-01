@@ -5,7 +5,7 @@ import { getMentionQuery } from "@/lib/message-utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { SendHorizonal, Loader2 } from "lucide-react";
+import { SendHorizonal, Loader2, X, Reply } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 
@@ -17,6 +17,8 @@ export function MessageInput({ channelId }: MessageInputProps) {
   const [content, setContent] = useState("");
   const sendMessage = useSendMessage();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const replyToMessage = useAppStore((s) => s.replyToMessage);
+  const setReplyToMessage = useAppStore((s) => s.setReplyToMessage);
 
   // Mention state
   const { data: agents } = useAgents();
@@ -141,14 +143,16 @@ export function MessageInput({ channelId }: MessageInputProps) {
         channelId,
         content: trimmed,
         mentions: mentions.length > 0 ? mentions : undefined,
+        parentId: replyToMessage?.id,
       });
       setContent("");
       setMentionOpen(false);
+      setReplyToMessage(null);
       textareaRef.current?.focus();
     } catch {
       // Error state available via sendMessage.isError
     }
-  }, [content, channelId, sendMessage]);
+  }, [content, channelId, sendMessage, replyToMessage?.id, setReplyToMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (mentionOpen && filtered.length > 0) {
@@ -189,6 +193,24 @@ export function MessageInput({ channelId }: MessageInputProps) {
 
   return (
     <div className="shrink-0 border-t border-border/50 p-4">
+        {/* Reply preview banner */}
+        {replyToMessage && (
+          <div className="mb-2 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+            <Reply className="h-3.5 w-3.5 text-primary/60 shrink-0" />
+            <span className="text-primary/80 font-medium shrink-0">
+              {replyToMessage.sender_name}
+            </span>
+            <span className="truncate text-muted-foreground/70">
+              {replyToMessage.content}
+            </span>
+            <button
+              onClick={() => setReplyToMessage(null)}
+              className="ml-auto shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-foreground transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         <div className="relative flex items-end gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 transition-[border-color,box-shadow] duration-150 focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/10">
         {/* @-mention dropdown */}
         {mentionOpen && filtered.length > 0 && (

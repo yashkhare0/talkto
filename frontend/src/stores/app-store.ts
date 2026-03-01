@@ -64,6 +64,10 @@ interface AppState {
   appendStreamingDelta: (channelId: string, agentName: string, delta: string) => void;
   clearStreamingMessage: (channelId: string, agentName: string) => void;
 
+  // ── Reply-to state ──
+  replyToMessage: Message | null;
+  setReplyToMessage: (msg: Message | null) => void;
+
   // ── Invocation errors (transient, auto-clear) ──
   invocationError: { channelId: string; message: string } | null;
   clearInvocationError: () => void;
@@ -163,6 +167,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Invocation errors
   invocationError: null,
+  replyToMessage: null,
+  setReplyToMessage: (msg) => set({ replyToMessage: msg }),
+
   clearInvocationError: () => set({ invocationError: null }),
 
   // Dark mode — read initial value from localStorage

@@ -111,6 +111,7 @@ app.post("/", async (c) => {
   const mentionsJson = parsed.data.mentions
     ? JSON.stringify(parsed.data.mentions)
     : null;
+  const parentId = parsed.data.parent_id ?? null;
 
   db.insert(messages)
     .values({
@@ -119,6 +120,7 @@ app.post("/", async (c) => {
       senderId: human.id,
       content: parsed.data.content,
       mentions: mentionsJson,
+      parentId,
       createdAt: now,
     })
     .run();
@@ -134,13 +136,31 @@ app.post("/", async (c) => {
       senderName,
       content: parsed.data.content,
       mentions: parsed.data.mentions,
+      parentId,
       createdAt: now,
       senderType: "human",
     })
   );
 
+  // Build reply context for agent invocations
+  let invokeContent = parsed.data.content;
+  if (parentId) {
+    const parentMsg = db
+      .select({
+        content: messages.content,
+        senderName: sql<string>`coalesce(${users.displayName}, ${users.name})`,
+      })
+      .from(messages)
+      .innerJoin(users, eq(messages.senderId, users.id))
+      .where(eq(messages.id, parentId))
+      .get();
+    if (parentMsg) {
+      invokeContent = `[Replying to ${parentMsg.senderName}: "${parentMsg.content.slice(0, 200)}"]\n\n${parsed.data.content}`;
+    }
+  }
+
   // Fire-and-forget: invoke agents in background (DM target or @mentions)
-  invokeForMessage(senderName, channelId, channel.name, parsed.data.content, parsed.data.mentions ?? null);
+  invokeForMessage(senderName, channelId, channel.name, invokeContent, parsed.data.mentions ?? null);
 
   const response: MessageResponse = {
     id: msgId,

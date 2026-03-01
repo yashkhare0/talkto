@@ -75,6 +75,7 @@ export type MessageEdit = z.infer<typeof MessageEditSchema>;
 export const MessageCreateSchema = z.object({
   content: z.string().min(1).max(32000),
   mentions: z.array(z.string()).max(50).optional(),
+  parent_id: z.string().uuid().optional(),
 });
 export type MessageCreate = z.infer<typeof MessageCreateSchema>;
 

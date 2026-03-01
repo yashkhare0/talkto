@@ -21,6 +21,7 @@ export function MessageFeed() {
   const streamingMessages = useAppStore((s) => s.streamingMessages);
   const invocationError = useAppStore((s) => s.invocationError);
   const clearInvocationError = useAppStore((s) => s.clearInvocationError);
+  const setReplyToMessage = useAppStore((s) => s.setReplyToMessage);
   const { data: fetchedMessages, isLoading } = useMessages(activeChannelId);
   const { data: me } = useMe();
   const deleteMessage = useDeleteMessage();
@@ -105,6 +106,23 @@ export function MessageFeed() {
     [activeChannelId, pinMessage],
   );
 
+  // Reply handler
+  const handleReply = useCallback(
+    (message: Message) => {
+      setReplyToMessage(message);
+    },
+    [setReplyToMessage],
+  );
+
+  // Build a map of message IDs to messages for parent lookups
+  const messagesById = useMemo(() => {
+    const map = new Map<string, Message>();
+    for (const msg of messages) {
+      map.set(msg.id, msg);
+    }
+    return map;
+  }, [messages]);
+
   // Track whether user is near the bottom of the scroll area.
   // Only auto-scroll if they haven't scrolled up to read history.
   const isNearBottom = useRef(true);
@@ -185,11 +203,13 @@ export function MessageFeed() {
                 {showDate && <DateSeparator iso={msg.created_at} />}
                 <MessageBubble
                   message={msg}
+                  parentMessage={msg.parent_id ? messagesById.get(msg.parent_id) ?? null : null}
                   isOwnMessage={msg.sender_id === me?.id}
                   showSender={showSender}
                   onDelete={handleDelete}
                   onPin={handlePin}
                   onEdit={handleEdit}
+                  onReply={handleReply}
                 />
               </div>
             );
