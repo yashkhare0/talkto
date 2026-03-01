@@ -138,6 +138,13 @@ function createTables(sqlite: Database) {
       updated_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS read_receipts (
+      user_id TEXT NOT NULL REFERENCES users(id),
+      channel_id TEXT NOT NULL REFERENCES channels(id),
+      last_read_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, channel_id)
+    );
+
     CREATE TABLE IF NOT EXISTS feature_votes (
       feature_id TEXT NOT NULL REFERENCES feature_requests(id),
       user_id TEXT NOT NULL REFERENCES users(id),

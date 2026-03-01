@@ -83,6 +83,13 @@ export function createTestDb(): TestDb {
     created_at TEXT NOT NULL
   )`);
 
+  db.run(sql`CREATE TABLE IF NOT EXISTS read_receipts (
+    user_id TEXT NOT NULL REFERENCES users(id),
+    channel_id TEXT NOT NULL REFERENCES channels(id),
+    last_read_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, channel_id)
+  )`);
+
   db.run(sql`CREATE TABLE IF NOT EXISTS feature_requests (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,

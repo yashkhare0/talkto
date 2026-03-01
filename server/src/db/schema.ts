@@ -237,6 +237,37 @@ export const featureVotes = sqliteTable(
   ]
 );
 
+// ---------------------------------------------------------------------------
+// read_receipts — tracks last_read_at per user per channel
+// ---------------------------------------------------------------------------
+
+export const readReceipts = sqliteTable(
+  "read_receipts",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => channels.id),
+    lastReadAt: text("last_read_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.channelId] }),
+  ]
+);
+
+export const readReceiptsRelations = relations(readReceipts, ({ one }) => ({
+  user: one(users, {
+    fields: [readReceipts.userId],
+    references: [users.id],
+  }),
+  channel: one(channels, {
+    fields: [readReceipts.channelId],
+    references: [channels.id],
+  }),
+}));
+
 export const featureVotesRelations = relations(featureVotes, ({ one }) => ({
   feature: one(featureRequests, {
     fields: [featureVotes.featureId],
