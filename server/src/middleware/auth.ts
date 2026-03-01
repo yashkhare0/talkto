@@ -95,7 +95,9 @@ export const authMiddleware = createMiddleware<AppBindings>(
     // --- Path 3: Localhost bypass ---
     // When not in network mode OR request is from localhost,
     // allow unauthenticated access to the default workspace.
-    const remoteAddr = c.req.header("X-Forwarded-For") ?? c.req.header("X-Real-IP");
+    // Use Bun's server.requestIP() (passed via c.env.ip) — NOT X-Forwarded-For
+    // which is user-controllable and can be spoofed for auth bypass.
+    const remoteAddr = c.env?.ip?.address;
 
     // In non-network mode, all requests are assumed local
     // In network mode, check the actual remote address
@@ -140,7 +142,8 @@ export const mcpAuthMiddleware = createMiddleware<AppBindings>(
     }
 
     // --- Path 2: Localhost bypass ---
-    const remoteAddr = c.req.header("X-Forwarded-For") ?? c.req.header("X-Real-IP");
+    // Use Bun's server.requestIP() — NOT X-Forwarded-For (spoofable)
+    const remoteAddr = c.env?.ip?.address;
     const isLocal = !config.network || isLocalhost(remoteAddr);
 
     if (isLocal) {

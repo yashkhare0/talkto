@@ -652,7 +652,7 @@ server.tool(
     limit: z.number().int().min(1).max(50).optional().describe("Max results (default 20)"),
   },
   async (args) => {
-    const result = searchMessages(args.query, args.channel, args.limit);
+    const result = searchMessages(args.query, args.channel, args.limit, serverWorkspaceId);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
     };

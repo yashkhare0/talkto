@@ -11,6 +11,16 @@ import type { AppBindings, ChannelResponse } from "../types";
 
 const app = new Hono<AppBindings>();
 
+/** Look up a channel by ID scoped to a workspace. Returns null if not found or wrong workspace. */
+function getChannelInWorkspace(channelId: string, workspaceId: string) {
+  const db = getDb();
+  return db
+    .select()
+    .from(channels)
+    .where(and(eq(channels.id, channelId), eq(channels.workspaceId, workspaceId)))
+    .get() ?? null;
+}
+
 function channelToResponse(ch: typeof channels.$inferSelect): ChannelResponse {
   return {
     id: ch.id,
@@ -45,19 +55,24 @@ app.get("/", (c) => {
 // GET /channels/unread/counts — get unread counts for all channels for a user
 // NOTE: Must be before /:channelId to avoid route conflict
 app.get("/unread/counts", (c) => {
+  const auth = c.get("auth");
   const db = getDb();
   const userId = c.req.query("user_id");
 
-  // Default to human user if no user_id provided
-  let resolvedUserId = userId;
+  // Use auth.userId, fall back to query param, then to type-based lookup
+  let resolvedUserId = auth.userId ?? userId;
   if (!resolvedUserId) {
     const human = db.select().from(users).where(eq(users.type, "human")).get();
     if (!human) return c.json({ detail: "No user found" }, 400);
     resolvedUserId = human.id;
   }
 
-  // Get all channels
-  const allChannels = db.select().from(channels).all();
+  // Get channels scoped to workspace
+  const allChannels = db
+    .select()
+    .from(channels)
+    .where(eq(channels.workspaceId, auth.workspaceId))
+    .all();
 
   // Get all read receipts for this user
   const receipts = db
@@ -143,21 +158,19 @@ app.post("/", async (c) => {
 
 // PATCH /channels/:channelId/topic — set channel topic
 app.patch("/:channelId/topic", async (c) => {
+  const auth = c.get("auth");
   const body = await c.req.json();
   const parsed = ChannelTopicSchema.safeParse(body);
   if (!parsed.success) {
     return c.json({ detail: parsed.error.message }, 400);
   }
 
-  const db = getDb();
-  const channel = db
-    .select()
-    .from(channels)
-    .where(eq(channels.id, c.req.param("channelId")))
-    .get();
+  const channel = getChannelInWorkspace(c.req.param("channelId"), auth.workspaceId);
   if (!channel) {
     return c.json({ detail: "Channel not found" }, 404);
   }
+
+  const db = getDb();
 
   db.update(channels)
     .set({ topic: parsed.data.topic || null })
@@ -170,12 +183,8 @@ app.patch("/:channelId/topic", async (c) => {
 
 // GET /channels/:channelId
 app.get("/:channelId", (c) => {
-  const db = getDb();
-  const channel = db
-    .select()
-    .from(channels)
-    .where(eq(channels.id, c.req.param("channelId")))
-    .get();
+  const auth = c.get("auth");
+  const channel = getChannelInWorkspace(c.req.param("channelId"), auth.workspaceId);
   if (!channel) {
     return c.json({ detail: "Channel not found" }, 404);
   }
@@ -184,15 +193,12 @@ app.get("/:channelId", (c) => {
 
 // GET /channels/:channelId/members — list all members in a channel
 app.get("/:channelId/members", (c) => {
+  const auth = c.get("auth");
   const channelId = c.req.param("channelId");
   const db = getDb();
 
-  // Verify channel exists
-  const channel = db
-    .select()
-    .from(channels)
-    .where(eq(channels.id, channelId))
-    .get();
+  // Verify channel exists and belongs to workspace
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
   if (!channel) {
     return c.json({ detail: "Channel not found" }, 404);
   }
@@ -230,10 +236,11 @@ app.get("/:channelId/members", (c) => {
 
 // POST /channels/:channelId/archive — archive a channel
 app.post("/:channelId/archive", (c) => {
+  const auth = c.get("auth");
   const channelId = c.req.param("channelId");
   const db = getDb();
 
-  const channel = db.select().from(channels).where(eq(channels.id, channelId)).get();
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
   if (!channel) {
     return c.json({ detail: "Channel not found" }, 404);
   }
@@ -256,10 +263,11 @@ app.post("/:channelId/archive", (c) => {
 
 // POST /channels/:channelId/unarchive — unarchive a channel
 app.post("/:channelId/unarchive", (c) => {
+  const auth = c.get("auth");
   const channelId = c.req.param("channelId");
   const db = getDb();
 
-  const channel = db.select().from(channels).where(eq(channels.id, channelId)).get();
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
   if (!channel) {
     return c.json({ detail: "Channel not found" }, 404);
   }
@@ -278,21 +286,24 @@ app.post("/:channelId/unarchive", (c) => {
 
 // POST /channels/:channelId/read — mark channel as read for a user
 app.post("/:channelId/read", async (c) => {
+  const auth = c.get("auth");
   const channelId = c.req.param("channelId");
   const db = getDb();
 
-  const channel = db.select().from(channels).where(eq(channels.id, channelId)).get();
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
   if (!channel) {
     return c.json({ detail: "Channel not found" }, 404);
   }
 
-  // Get user_id from body or default to human user
-  let userId: string;
-  try {
-    const body = await c.req.json();
-    userId = body.user_id;
-  } catch {
-    userId = "";
+  // Use auth.userId, fall back to body, then type-based lookup
+  let userId = auth.userId ?? "";
+  if (!userId) {
+    try {
+      const body = await c.req.json();
+      userId = body.user_id ?? "";
+    } catch {
+      userId = "";
+    }
   }
 
   if (!userId) {

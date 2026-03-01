@@ -94,6 +94,7 @@ app.route("/api/channels/:channelId/messages", messagesRoutes);
 
 // Search messages across all channels
 app.get("/api/search", (c) => {
+  const auth = c.get("auth");
   const query = c.req.query("q");
   if (!query || query.trim().length === 0) {
     return c.json({ detail: "Query parameter 'q' is required" }, 400);
@@ -106,7 +107,16 @@ app.get("/api/search", (c) => {
   // Escape LIKE wildcards to prevent '%' or '_' in user input from matching everything
   const escapedQuery = query.replace(/%/g, "\\%").replace(/_/g, "\\_");
 
-  let baseQuery = db
+  // Base conditions: text match + workspace scoping
+  const conditions = [
+    like(messages.content, `%${escapedQuery}%`),
+    eq(channels.workspaceId, auth.workspaceId),
+  ];
+  if (channelFilter) {
+    conditions.push(eq(channels.name, channelFilter));
+  }
+
+  const baseQuery = db
     .select({
       id: messages.id,
       channelId: messages.channelId,
@@ -122,15 +132,7 @@ app.get("/api/search", (c) => {
     .from(messages)
     .innerJoin(users, eq(messages.senderId, users.id))
     .innerJoin(channels, eq(messages.channelId, channels.id))
-    .where(like(messages.content, `%${escapedQuery}%`))
-    .$dynamic();
-
-  if (channelFilter) {
-    // Use and() to combine with the existing LIKE filter instead of replacing it
-    baseQuery = baseQuery.where(
-      and(like(messages.content, `%${escapedQuery}%`), eq(channels.name, channelFilter))
-    );
-  }
+    .where(and(...conditions));
 
   const rows = baseQuery
     .orderBy(desc(messages.createdAt))

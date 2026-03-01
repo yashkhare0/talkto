@@ -290,7 +290,8 @@ export function getAgentMessages(
 export function searchMessages(
   query: string,
   channelName?: string,
-  limit: number = 20
+  limit: number = 20,
+  workspaceId?: string
 ): Record<string, unknown> {
   const db = getDb();
   const maxResults = Math.min(limit, 50);
@@ -298,7 +299,16 @@ export function searchMessages(
   // Escape LIKE wildcards to prevent '%' or '_' in user input from matching everything
   const escapedQuery = query.replace(/%/g, "\\%").replace(/_/g, "\\_");
 
-  let baseQuery = db
+  // Build conditions: text match + optional workspace + optional channel
+  const conditions = [like(messages.content, `%${escapedQuery}%`)];
+  if (workspaceId) {
+    conditions.push(eq(channels.workspaceId, workspaceId));
+  }
+  if (channelName) {
+    conditions.push(eq(channels.name, channelName));
+  }
+
+  const baseQuery = db
     .select({
       id: messages.id,
       channelId: messages.channelId,
@@ -314,15 +324,7 @@ export function searchMessages(
     .from(messages)
     .innerJoin(users, eq(messages.senderId, users.id))
     .innerJoin(channels, eq(messages.channelId, channels.id))
-    .where(like(messages.content, `%${escapedQuery}%`))
-    .$dynamic();
-
-  if (channelName) {
-    // Use and() to combine with the existing LIKE filter instead of replacing it
-    baseQuery = baseQuery.where(
-      and(like(messages.content, `%${escapedQuery}%`), eq(channels.name, channelName))
-    );
-  }
+    .where(and(...conditions));
 
   const rows = baseQuery
     .orderBy(desc(messages.createdAt))
@@ -361,10 +363,13 @@ export function agentEditMessage(
     .get();
   if (!agent) return { error: `Agent '${agentName}' not found.` };
 
+  const workspaceId = agent.workspaceId ?? DEFAULT_WORKSPACE_ID;
+
+  // Scope channel lookup to agent's workspace
   const channel = db
     .select()
     .from(channels)
-    .where(eq(channels.name, channelName))
+    .where(and(eq(channels.name, channelName), eq(channels.workspaceId, workspaceId)))
     .get();
   if (!channel) return { error: `Channel '${channelName}' not found.` };
 
@@ -384,7 +389,7 @@ export function agentEditMessage(
     channelId: channel.id,
     content,
     editedAt,
-  }));
+  }), workspaceId);
 
   return { edited: true, message_id: messageId, edited_at: editedAt };
 }
@@ -407,10 +412,13 @@ export function agentReactMessage(
     .get();
   if (!agent) return { error: `Agent '${agentName}' not found.` };
 
+  const workspaceId = agent.workspaceId ?? DEFAULT_WORKSPACE_ID;
+
+  // Scope channel lookup to agent's workspace
   const channel = db
     .select()
     .from(channels)
-    .where(eq(channels.name, channelName))
+    .where(and(eq(channels.name, channelName), eq(channels.workspaceId, workspaceId)))
     .get();
   if (!channel) return { error: `Channel '${channelName}' not found.` };
 
@@ -448,7 +456,7 @@ export function agentReactMessage(
       emoji,
       userName: agentName,
       action: "remove",
-    }));
+    }), workspaceId);
 
     return { action: "removed", emoji, message_id: messageId };
   } else {
@@ -463,7 +471,7 @@ export function agentReactMessage(
       emoji,
       userName: agentName,
       action: "add",
-    }));
+    }), workspaceId);
 
     return { action: "added", emoji, message_id: messageId };
   }

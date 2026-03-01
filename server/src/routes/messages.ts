@@ -23,15 +23,26 @@ async function safeJsonBody(c: { req: { json: () => Promise<unknown> } }): Promi
   }
 }
 
+/** Look up a channel by ID scoped to a workspace. Returns null if not found or wrong workspace. */
+function getChannelInWorkspace(channelId: string, workspaceId: string) {
+  const db = getDb();
+  return db
+    .select()
+    .from(channels)
+    .where(and(eq(channels.id, channelId), eq(channels.workspaceId, workspaceId)))
+    .get() ?? null;
+}
+
 // GET /channels/:channelId/messages
 app.get("/", (c) => {
+  const auth = c.get("auth");
   const channelId = c.req.param("channelId");
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10) || 50, 100);
   const before = c.req.query("before");
   const db = getDb();
 
-  // Verify channel exists
-  const channel = db.select().from(channels).where(eq(channels.id, channelId)).get();
+  // Verify channel exists and belongs to current workspace
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
   if (!channel) {
     return c.json({ detail: "Channel not found" }, 404);
   }
@@ -147,8 +158,8 @@ app.post("/", async (c) => {
   }
   const db = getDb();
 
-  // Verify channel
-  const channel = db.select().from(channels).where(eq(channels.id, channelId)).get();
+  // Verify channel belongs to current workspace
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
   if (!channel) {
     return c.json({ detail: "Channel not found" }, 404);
   }
@@ -236,9 +247,14 @@ app.post("/", async (c) => {
 
 // POST /channels/:channelId/messages/:messageId/pin — toggle pin
 app.post("/:messageId/pin", (c) => {
+  const auth = c.get("auth");
   const channelId = c.req.param("channelId");
   const messageId = c.req.param("messageId");
   const db = getDb();
+
+  // Verify channel belongs to current workspace
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
+  if (!channel) return c.json({ detail: "Channel not found" }, 404);
 
   const msg = db.select().from(messages).where(eq(messages.id, messageId)).get();
   if (!msg) return c.json({ detail: "Message not found" }, 404);
@@ -265,12 +281,14 @@ app.post("/:messageId/pin", (c) => {
 
 // GET /channels/:channelId/messages/pinned — get pinned messages
 app.get("/pinned", (c) => {
+  const auth = c.get("auth");
   const channelId = c.req.param("channelId");
-  const db = getDb();
 
-  const channel = db.select().from(channels).where(eq(channels.id, channelId)).get();
+  // Verify channel belongs to current workspace
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
   if (!channel) return c.json({ detail: "Channel not found" }, 404);
 
+  const db = getDb();
   const rows = db
     .select({
       id: messages.id,
@@ -321,6 +339,10 @@ app.patch("/:messageId", async (c) => {
   }
   const db = getDb();
 
+  // Verify channel belongs to current workspace
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
+  if (!channel) return c.json({ detail: "Channel not found" }, 404);
+
   const msg = db.select().from(messages).where(eq(messages.id, messageId)).get();
   if (!msg) return c.json({ detail: "Message not found" }, 404);
   if (msg.channelId !== channelId) return c.json({ detail: "Message does not belong to this channel" }, 400);
@@ -336,7 +358,7 @@ app.patch("/:messageId", async (c) => {
     .where(eq(messages.id, messageId))
     .run();
 
-  broadcastEvent(messageEditedEvent({ messageId, channelId, content: parsed.data.content, editedAt }));
+  broadcastEvent(messageEditedEvent({ messageId, channelId, content: parsed.data.content, editedAt }), channel.workspaceId);
 
   return c.json({ id: messageId, content: parsed.data.content, edited_at: editedAt });
 });
@@ -348,8 +370,8 @@ app.delete("/:messageId", (c) => {
   const messageId = c.req.param("messageId");
   const db = getDb();
 
-  // Verify channel exists
-  const channel = db.select().from(channels).where(eq(channels.id, channelId)).get();
+  // Verify channel exists and belongs to current workspace
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
   if (!channel) {
     return c.json({ detail: "Channel not found" }, 404);
   }
@@ -383,6 +405,7 @@ app.delete("/:messageId", (c) => {
 
 // POST /channels/:channelId/messages/:messageId/react — toggle reaction
 app.post("/:messageId/react", async (c) => {
+  const auth = c.get("auth");
   const channelId = c.req.param("channelId");
   const messageId = c.req.param("messageId");
   const body = await safeJsonBody(c);
@@ -393,13 +416,19 @@ app.post("/:messageId/react", async (c) => {
   }
   const db = getDb();
 
+  // Verify channel belongs to current workspace
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
+  if (!channel) return c.json({ detail: "Channel not found" }, 404);
+
   // Verify message exists and belongs to channel
   const msg = db.select().from(messages).where(eq(messages.id, messageId)).get();
   if (!msg) return c.json({ detail: "Message not found" }, 404);
   if (msg.channelId !== channelId) return c.json({ detail: "Message does not belong to this channel" }, 400);
 
-  // Get human user
-  const human = db.select().from(users).where(eq(users.type, "human")).get();
+  // Get the authenticated user (use auth.userId instead of type-based lookup)
+  const human = auth.userId
+    ? db.select().from(users).where(eq(users.id, auth.userId)).get()
+    : db.select().from(users).where(eq(users.type, "human")).get();
   if (!human) return c.json({ detail: "No user onboarded" }, 400);
 
   const userName = human.displayName ?? human.name;
@@ -430,7 +459,7 @@ app.post("/:messageId/react", async (c) => {
       )
       .run();
 
-    broadcastEvent(reactionEvent({ messageId, channelId, emoji, userName, action: "remove" }));
+    broadcastEvent(reactionEvent({ messageId, channelId, emoji, userName, action: "remove" }), channel.workspaceId);
     return c.json({ action: "removed", emoji });
   } else {
     // Add reaction
@@ -439,7 +468,7 @@ app.post("/:messageId/react", async (c) => {
       .values({ messageId, userId: human.id, emoji, createdAt: now })
       .run();
 
-    broadcastEvent(reactionEvent({ messageId, channelId, emoji, userName, action: "add" }));
+    broadcastEvent(reactionEvent({ messageId, channelId, emoji, userName, action: "add" }), channel.workspaceId);
     return c.json({ action: "added", emoji });
   }
 });

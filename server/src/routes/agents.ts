@@ -200,11 +200,12 @@ app.get("/", (c) => {
 
 // GET /agents/:agentName/stats — activity stats for an agent
 app.get("/:agentName/stats", (c) => {
+  const auth = c.get("auth");
   const db = getDb();
   const agent = db
     .select()
     .from(agents)
-    .where(eq(agents.agentName, c.req.param("agentName")))
+    .where(and(eq(agents.agentName, c.req.param("agentName")), eq(agents.workspaceId, auth.workspaceId)))
     .get();
   if (!agent) {
     return c.json({ detail: "Agent not found" }, 404);
@@ -262,11 +263,12 @@ app.get("/:agentName/stats", (c) => {
 
 // GET /agents/:agentName
 app.get("/:agentName", (c) => {
+  const auth = c.get("auth");
   const db = getDb();
   const agent = db
     .select()
     .from(agents)
-    .where(eq(agents.agentName, c.req.param("agentName")))
+    .where(and(eq(agents.agentName, c.req.param("agentName")), eq(agents.workspaceId, auth.workspaceId)))
     .get();
   if (!agent) {
     return c.json({ detail: "Agent not found" }, 404);
@@ -283,7 +285,7 @@ app.post("/:agentName/dm", (c) => {
   const agent = db
     .select()
     .from(agents)
-    .where(eq(agents.agentName, agentName))
+    .where(and(eq(agents.agentName, agentName), eq(agents.workspaceId, auth.workspaceId)))
     .get();
   if (!agent) {
     return c.json({ detail: "Agent not found" }, 404);

@@ -303,6 +303,10 @@ export interface AuthContext {
 
 /** Hono app-level bindings for typed context. */
 export interface AppBindings {
+  Bindings: {
+    /** Remote IP address from Bun's server.requestIP() */
+    ip: { address: string; family: string; port: number } | null;
+  };
   Variables: {
     auth: AuthContext;
   };
