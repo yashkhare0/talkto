@@ -7,6 +7,23 @@
 import { create } from "zustand";
 import type { AuthInfo, Message, Workspace } from "@/lib/types";
 
+function readStarredChannels(): Set<string> {
+  try {
+    const raw = localStorage.getItem("talkto-starred-channels");
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function writeStarredChannels(ids: Set<string>): void {
+  try {
+    localStorage.setItem("talkto-starred-channels", JSON.stringify([...ids]));
+  } catch {
+    // Storage unavailable
+  }
+}
+
 function readDarkMode(): boolean {
   try {
     return localStorage.getItem("talkto-dark-mode") === "true";
@@ -71,6 +88,10 @@ interface AppState {
   // ── Invocation errors (transient, auto-clear) ──
   invocationError: { channelId: string; message: string } | null;
   clearInvocationError: () => void;
+
+  // ── Starred channels ──
+  starredChannels: Set<string>;
+  toggleStarredChannel: (channelId: string) => void;
 
   // ── Dark mode ──
   darkMode: boolean;
@@ -179,6 +200,20 @@ export const useAppStore = create<AppState>((set) => ({
   setReplyToMessage: (msg) => set({ replyToMessage: msg }),
 
   clearInvocationError: () => set({ invocationError: null }),
+
+  // Starred channels
+  starredChannels: readStarredChannels(),
+  toggleStarredChannel: (channelId) =>
+    set((s) => {
+      const next = new Set(s.starredChannels);
+      if (next.has(channelId)) {
+        next.delete(channelId);
+      } else {
+        next.add(channelId);
+      }
+      writeStarredChannels(next);
+      return { starredChannels: next };
+    }),
 
   // Dark mode — read initial value from localStorage
   darkMode: readDarkMode(),
