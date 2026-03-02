@@ -3,7 +3,7 @@
  */
 
 import { Hono } from "hono";
-import { eq, asc, and, gt, sql } from "drizzle-orm";
+import { eq, asc, and, gt, sql, desc } from "drizzle-orm";
 import { getDb } from "../db";
 import { channels, channelMembers, users, agents, messages, readReceipts } from "../db/schema";
 import { ChannelCreateSchema, ChannelTopicSchema } from "../types";
@@ -333,6 +333,69 @@ app.post("/:channelId/read", async (c) => {
   }
 
   return c.json({ channel_id: channelId, user_id: userId, last_read_at: now });
+});
+
+// GET /channels/:channelId/export — export channel history as JSON
+app.get("/:channelId/export", (c) => {
+  const auth = c.get("auth");
+  const channelId = c.req.param("channelId");
+  const db = getDb();
+
+  const channel = getChannelInWorkspace(channelId, auth.workspaceId);
+  if (!channel) {
+    return c.json({ detail: "Channel not found" }, 404);
+  }
+
+  const format = c.req.query("format") ?? "json";
+  if (format !== "json") {
+    return c.json({ detail: "Only JSON format is currently supported" }, 400);
+  }
+
+  const rows = db
+    .select({
+      id: messages.id,
+      senderId: messages.senderId,
+      senderName: sql<string>`coalesce(${users.displayName}, ${users.name})`,
+      senderType: users.type,
+      content: messages.content,
+      mentions: messages.mentions,
+      parentId: messages.parentId,
+      isPinned: messages.isPinned,
+      editedAt: messages.editedAt,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
+    .innerJoin(users, eq(messages.senderId, users.id))
+    .where(eq(messages.channelId, channelId))
+    .orderBy(asc(messages.createdAt))
+    .all();
+
+  const exported = {
+    channel: {
+      id: channel.id,
+      name: channel.name,
+      type: channel.type,
+      topic: channel.topic,
+      created_at: channel.createdAt,
+    },
+    exported_at: new Date().toISOString(),
+    message_count: rows.length,
+    messages: rows.map((row) => ({
+      id: row.id,
+      sender_id: row.senderId,
+      sender_name: row.senderName,
+      sender_type: row.senderType,
+      content: row.content,
+      mentions: row.mentions ? JSON.parse(row.mentions) : null,
+      parent_id: row.parentId,
+      is_pinned: Boolean(row.isPinned),
+      edited_at: row.editedAt,
+      created_at: row.createdAt,
+    })),
+  };
+
+  c.header("Content-Disposition", `attachment; filename="${channel.name.replace(/^#/, "")}-export.json"`);
+  return c.json(exported);
 });
 
 export default app;

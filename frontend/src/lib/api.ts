@@ -185,6 +185,28 @@ export function deleteFeature(featureId: string) {
   });
 }
 
+// ── Export ──────────────────────────────────────────────
+
+export function exportChannelHistory(channelId: string) {
+  return request<{
+    channel: { id: string; name: string; type: string; topic: string | null; created_at: string };
+    exported_at: string;
+    message_count: number;
+    messages: Array<{
+      id: string;
+      sender_id: string;
+      sender_name: string;
+      sender_type: string;
+      content: string;
+      mentions: string[] | null;
+      parent_id: string | null;
+      is_pinned: boolean;
+      edited_at: string | null;
+      created_at: string;
+    }>;
+  }>(`/channels/${channelId}/export`);
+}
+
 // ── Auth ────────────────────────────────────────────────
 
 export function getAuthMe() {
