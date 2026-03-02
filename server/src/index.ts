@@ -15,8 +15,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import type { AppBindings } from "./types/index";
 import { config, BASE_DIR } from "./lib/config";
 import { getDb, closeDb, DEFAULT_WORKSPACE_ID } from "./db";
-import { agents, messages, channels, users } from "./db/schema";
-import { eq, like, desc, sql, and } from "drizzle-orm";
+import { agents } from "./db/schema";
 import { seedDefaults } from "./db/seed";
 import {
   acceptClient,
@@ -48,6 +47,7 @@ import agentsRoutes from "./routes/agents";
 import featuresRoutes from "./routes/features";
 import workspacesRoutes from "./routes/workspaces";
 import authRoutes from "./routes/auth";
+import searchRoutes from "./routes/search";
 
 // ---------------------------------------------------------------------------
 // Initialize database
@@ -102,68 +102,8 @@ app.route("/api/features", featuresRoutes);
 // Messages are nested under channels: /api/channels/:channelId/messages
 app.route("/api/channels/:channelId/messages", messagesRoutes);
 
-// Search messages across all channels
-app.get("/api/search", (c) => {
-  const auth = c.get("auth");
-  const query = c.req.query("q");
-  if (!query || query.trim().length === 0) {
-    return c.json({ detail: "Query parameter 'q' is required" }, 400);
-  }
-  const limit = Math.min(parseInt(c.req.query("limit") ?? "20", 10) || 20, 50);
-  const channelFilter = c.req.query("channel"); // optional channel name filter
-
-  const db = getDb();
-
-  // Escape LIKE wildcards to prevent '%' or '_' in user input from matching everything
-  const escapedQuery = query.replace(/%/g, "\\%").replace(/_/g, "\\_");
-
-  // Base conditions: text match + workspace scoping
-  const conditions = [
-    like(messages.content, `%${escapedQuery}%`),
-    eq(channels.workspaceId, auth.workspaceId),
-  ];
-  if (channelFilter) {
-    conditions.push(eq(channels.name, channelFilter));
-  }
-
-  const baseQuery = db
-    .select({
-      id: messages.id,
-      channelId: messages.channelId,
-      channelName: channels.name,
-      senderId: messages.senderId,
-      senderName: sql`coalesce(${users.displayName}, ${users.name})`,
-      senderType: users.type,
-      content: messages.content,
-      mentions: messages.mentions,
-      parentId: messages.parentId,
-      createdAt: messages.createdAt,
-    })
-    .from(messages)
-    .innerJoin(users, eq(messages.senderId, users.id))
-    .innerJoin(channels, eq(messages.channelId, channels.id))
-    .where(and(...conditions));
-
-  const rows = baseQuery
-    .orderBy(desc(messages.createdAt))
-    .limit(limit)
-    .all();
-
-  const results = rows.map((row: Record<string, unknown>) => ({
-    id: row.id,
-    channel_id: row.channelId,
-    channel_name: row.channelName,
-    sender_id: row.senderId,
-    sender_name: row.senderName,
-    sender_type: row.senderType,
-    content: row.content,
-    mentions: row.mentions ? JSON.parse(row.mentions as string) : null,
-    parent_id: row.parentId,
-    created_at: row.createdAt,
-  }));
-
-  return c.json({ query, results, count: results.length });
-});
+// Search messages across all channels (with snippet highlighting)
+app.route("/api/search", searchRoutes);
 
 // ---------------------------------------------------------------------------
 // MCP Server — streamable HTTP transport at /mcp
