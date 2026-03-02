@@ -98,10 +98,16 @@ export interface SearchResult {
   created_at: string;
 }
 
-export function searchMessages(query: string, channel?: string, limit?: number) {
+export function searchMessages(
+  query: string,
+  options?: { channel?: string; sender?: string; after?: string; before?: string; limit?: number },
+) {
   const params = new URLSearchParams({ q: query });
-  if (channel) params.set("channel", channel);
-  if (limit) params.set("limit", String(limit));
+  if (options?.channel) params.set("channel", options.channel);
+  if (options?.sender) params.set("sender", options.sender);
+  if (options?.after) params.set("after", options.after);
+  if (options?.before) params.set("before", options.before);
+  if (options?.limit) params.set("limit", String(options.limit));
   return request<{ query: string; results: SearchResult[]; count: number }>(
     `/search?${params}`,
   );

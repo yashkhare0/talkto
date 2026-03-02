@@ -70,7 +70,7 @@ export function WorkspaceHeader({
     }
     setSearching(true);
     try {
-      const data = await api.searchMessages(q.trim());
+      const data = await api.searchMessages(q.trim(), {});
       setSearchResults(data.results);
     } catch {
       setSearchResults([]);
