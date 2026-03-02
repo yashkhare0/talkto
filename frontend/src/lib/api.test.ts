@@ -278,3 +278,23 @@ describe("feature endpoints", () => {
     );
   });
 });
+
+describe("Unread Counts", () => {
+  it("getUnreadCounts calls correct endpoint", async () => {
+    mockFetch.mockResolvedValue(mockResponse([]));
+    await api.getUnreadCounts();
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/channels/unread/counts",
+      expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
+  it("markChannelRead calls correct endpoint", async () => {
+    mockFetch.mockResolvedValue(mockResponse({ channel_id: "c1", user_id: "u1", last_read_at: "2025-01-01" }));
+    await api.markChannelRead("c1");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/channels/c1/read",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+});

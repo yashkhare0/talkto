@@ -7,7 +7,7 @@
  * URL sync: ?channel=general | ?channel=dm-agentname | ?channel=project-foo
  */
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { useChannels, useAgents } from "@/hooks/use-queries";
+import { useChannels, useAgents, useMarkChannelRead } from "@/hooks/use-queries";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useAppStore } from "@/stores/app-store";
 import { ChannelList } from "./channel-list";
@@ -86,6 +86,9 @@ export function WorkspaceLayout({
   const initialUrlApplied = useRef(false);
   const isUserNavigation = useRef(false);
 
+  // Mark channel as read when switching
+  const markChannelRead = useMarkChannelRead();
+
   // Connect WebSocket and subscribe to all channels
   const { subscribe } = useWebSocket(true);
 
@@ -123,8 +126,11 @@ export function WorkspaceLayout({
     (id: string | null) => {
       isUserNavigation.current = true;
       setActiveChannelId(id);
+      if (id) {
+        markChannelRead.mutate(id);
+      }
     },
-    [setActiveChannelId],
+    [setActiveChannelId, markChannelRead],
   );
 
   // Sync URL when activeChannelId changes

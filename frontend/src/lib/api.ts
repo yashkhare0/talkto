@@ -60,6 +60,26 @@ export function createChannel(name: string) {
   });
 }
 
+// ── Unread ─────────────────────────────────────────────
+
+export interface UnreadCount {
+  channel_id: string;
+  channel_name: string;
+  unread_count: number;
+  last_read_at: string | null;
+}
+
+export function getUnreadCounts() {
+  return request<UnreadCount[]>("/channels/unread/counts");
+}
+
+export function markChannelRead(channelId: string) {
+  return request<{ channel_id: string; user_id: string; last_read_at: string }>(
+    `/channels/${channelId}/read`,
+    { method: "POST" },
+  );
+}
+
 // ── Messages ───────────────────────────────────────────
 
 export function getMessages(

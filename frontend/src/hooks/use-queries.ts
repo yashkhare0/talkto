@@ -20,6 +20,7 @@ export const queryKeys = {
   members: (workspaceId: string) => ["workspace", workspaceId, "members"] as const,
   apiKeys: (workspaceId: string) => ["workspace", workspaceId, "keys"] as const,
   invites: (workspaceId: string) => ["workspace", workspaceId, "invites"] as const,
+  unreadCounts: ["unread-counts"] as const,
 };
 
 // ── User ───────────────────────────────────────────────
@@ -73,6 +74,27 @@ export function useChannels() {
     queryKey: queryKeys.channels,
     queryFn: api.listChannels,
     staleTime: 30_000,
+  });
+}
+
+// ── Unread Counts ──────────────────────────────────────
+
+export function useUnreadCounts() {
+  return useQuery({
+    queryKey: queryKeys.unreadCounts,
+    queryFn: api.getUnreadCounts,
+    staleTime: 10_000,
+    refetchInterval: 30_000, // Poll every 30s for unread updates
+  });
+}
+
+export function useMarkChannelRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (channelId: string) => api.markChannelRead(channelId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.unreadCounts });
+    },
   });
 }
 
