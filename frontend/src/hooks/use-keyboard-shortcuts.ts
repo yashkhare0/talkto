@@ -7,6 +7,7 @@ interface ShortcutHandlers {
   onCloseSearch?: () => void;
   onToggleSidebar?: () => void;
   onToggleFeatures?: () => void;
+  onToggleShortcutsHelp?: () => void;
 }
 
 /**
@@ -64,6 +65,13 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers = {}) {
       if (mod && e.shiftKey && e.key === "F") {
         e.preventDefault();
         handlers.onToggleFeatures?.();
+        return;
+      }
+
+      // ? → show shortcuts help
+      if (e.key === "?" && !e.shiftKey && !mod) {
+        e.preventDefault();
+        handlers.onToggleShortcutsHelp?.();
         return;
       }
     }

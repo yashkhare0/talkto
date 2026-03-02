@@ -16,6 +16,7 @@ import { WorkspaceHeader } from "./workspace-header";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { WorkspaceSettings } from "./workspace-settings";
 import { FeaturePanel } from "./feature-panel";
+import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -75,12 +76,14 @@ export function WorkspaceLayout({
   const [featuresOpen, setFeaturesOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
 
   // Keyboard shortcuts
   const shortcutHandlers = useMemo(() => ({
     onToggleSearch: () => setSearchOpen((v) => !v),
     onCloseSearch: () => setSearchOpen(false),
     onToggleFeatures: () => setFeaturesOpen((v) => !v),
+    onToggleShortcutsHelp: () => setShortcutsHelpOpen((v) => !v),
   }), []);
   useKeyboardShortcuts(shortcutHandlers);
   const initialUrlApplied = useRef(false);
@@ -245,6 +248,12 @@ export function WorkspaceLayout({
 
       {/* Workspace settings (Sheet overlay) */}
       <WorkspaceSettings open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      {/* Keyboard shortcuts help dialog */}
+      <KeyboardShortcutsDialog
+        open={shortcutsHelpOpen}
+        onClose={() => setShortcutsHelpOpen(false)}
+      />
     </div>
   );
 }
