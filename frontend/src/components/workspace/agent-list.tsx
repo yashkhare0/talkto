@@ -104,10 +104,19 @@ export function AgentList({ agents, isLoading, onSelectChannel }: AgentListProps
 
   return (
     <div className="px-3">
-      <div className="px-0 py-1.5">
+      <div className="px-0 py-1.5 flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
           Agents
         </span>
+        {sortedActive.length > 0 && (
+          <span className="text-[10px] text-sidebar-foreground/30 tabular-nums">
+            <span className="text-talkto-online font-medium">
+              {sortedActive.filter((a) => (agentStatuses.get(a.agent_name) ?? a.status) === "online").length}
+            </span>
+            {" / "}
+            {sortedActive.length} online
+          </span>
+        )}
       </div>
 
       <div className="space-y-0.5">
@@ -266,7 +275,12 @@ function AgentItem({
             {agent.current_task}
           </span>
         )}
-        {!isGhost && !isOnline && agent.message_count != null && agent.message_count > 0 && (
+        {!isGhost && !isOnline && agent.last_message_at && (
+          <span className="block truncate text-[10px] text-sidebar-foreground/20">
+            last seen {formatRelativeTime(agent.last_message_at)}
+          </span>
+        )}
+        {!isGhost && !isOnline && !agent.last_message_at && agent.message_count != null && agent.message_count > 0 && (
           <span className="block truncate text-[10px] text-sidebar-foreground/20">
             {agent.message_count} message{agent.message_count !== 1 ? "s" : ""}
           </span>
