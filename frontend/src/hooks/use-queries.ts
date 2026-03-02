@@ -76,6 +76,19 @@ export function useChannels() {
   });
 }
 
+// ── Channel Topic ──────────────────────────────────────
+
+export function useUpdateChannelTopic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ channelId, topic }: { channelId: string; topic: string }) =>
+      api.updateChannelTopic(channelId, topic),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.channels });
+    },
+  });
+}
+
 // ── Messages ───────────────────────────────────────────
 
 export function useMessages(channelId: string | null) {

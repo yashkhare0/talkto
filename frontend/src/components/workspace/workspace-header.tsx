@@ -2,7 +2,7 @@
 import { useState, useCallback } from "react";
 import type { Channel } from "@/lib/types";
 import { useAppStore } from "@/stores/app-store";
-import { useMe, useAgents } from "@/hooks/use-queries";
+import { useMe, useAgents, useUpdateChannelTopic } from "@/hooks/use-queries";
 import {
   Hash,
   FolderGit2,
@@ -61,6 +61,9 @@ export function WorkspaceHeader({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<api.SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [editingTopic, setEditingTopic] = useState(false);
+  const [topicDraft, setTopicDraft] = useState("");
+  const updateTopic = useUpdateChannelTopic();
 
   const handleSearch = useCallback(async (q: string) => {
     setSearchQuery(q);
@@ -148,12 +151,51 @@ export function WorkspaceHeader({
                 <h1 className="truncate text-sm font-semibold">
                   {channel.name.replace(/^#/, "")}
                 </h1>
-                {channel.topic && (
-                  <span className="hidden sm:inline truncate text-xs text-muted-foreground/50 max-w-[300px]">
+                {editingTopic ? (
+                  <input
+                    type="text"
+                    value={topicDraft}
+                    onChange={(e) => setTopicDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        updateTopic.mutate(
+                          { channelId: channel.id, topic: topicDraft.trim() },
+                          { onSuccess: () => setEditingTopic(false) },
+                        );
+                      }
+                      if (e.key === "Escape") setEditingTopic(false);
+                    }}
+                    onBlur={() => setEditingTopic(false)}
+                    placeholder="Set a topic..."
+                    className="hidden sm:inline w-48 rounded border border-border/60 bg-muted/20 px-2 py-0.5 text-xs text-muted-foreground focus:border-primary/30 focus:outline-none"
+                    maxLength={500}
+                    autoFocus
+                  />
+                ) : channel.topic ? (
+                  <button
+                    onClick={() => {
+                      setTopicDraft(channel.topic ?? "");
+                      setEditingTopic(true);
+                    }}
+                    className="hidden sm:inline truncate text-xs text-muted-foreground/50 max-w-[300px] hover:text-muted-foreground/80 transition-colors cursor-pointer"
+                    title="Click to edit topic"
+                  >
                     {channel.topic}
-                  </span>
-                )}
-                {!channel.topic && channel.type === "project" && channel.project_path && (
+                  </button>
+                ) : channel.type !== "dm" ? (
+                  <button
+                    onClick={() => {
+                      setTopicDraft("");
+                      setEditingTopic(true);
+                    }}
+                    className="hidden sm:inline text-xs text-muted-foreground/30 hover:text-muted-foreground/50 transition-colors cursor-pointer"
+                    title="Click to set topic"
+                  >
+                    Add a topic...
+                  </button>
+                ) : null}
+                {!editingTopic && !channel.topic && channel.type === "project" && channel.project_path && (
                   <Badge variant="outline" className="hidden sm:inline-flex h-5 max-w-[300px] truncate text-[10px] font-mono font-normal text-muted-foreground/50">
                     {channel.project_path}
                   </Badge>
