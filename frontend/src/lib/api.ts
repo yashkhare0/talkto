@@ -60,6 +60,15 @@ export function createChannel(name: string) {
   });
 }
 
+// ── Channel Topic ──────────────────────────────────────
+
+export function updateChannelTopic(channelId: string, topic: string) {
+  return request<Channel>(`/channels/${channelId}/topic`, {
+    method: "PATCH",
+    body: JSON.stringify({ topic }),
+  });
+}
+
 // ── Messages ───────────────────────────────────────────
 
 export function getMessages(

@@ -278,3 +278,14 @@ describe("feature endpoints", () => {
     );
   });
 });
+
+describe("Channel Topic", () => {
+  it("updateChannelTopic calls correct endpoint", async () => {
+    mockFetch.mockResolvedValue(mockResponse({ id: "c1", name: "#general", topic: "New topic" }));
+    await api.updateChannelTopic("c1", "New topic");
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/channels/c1/topic",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+  });
+});
