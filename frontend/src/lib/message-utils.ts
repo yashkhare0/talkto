@@ -15,6 +15,25 @@ export function isPlainText(content: string): boolean {
   return !MARKDOWN_PATTERN.test(content);
 }
 
+/** Format an ISO timestamp as a full localized date+time string for tooltips. */
+export function formatFullTimestamp(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 /** Format an ISO timestamp as a localized time string (HH:MM). */
 export function formatTime(iso: string): string {
   try {

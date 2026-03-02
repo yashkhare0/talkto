@@ -2,7 +2,7 @@
 import type { Message } from "@/lib/types";
 import { Bot, User, Trash2, Pin, Pencil, Check, X, Reply, SmilePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isPlainText, formatTime } from "@/lib/message-utils";
+import { isPlainText, formatTime, formatFullTimestamp } from "@/lib/message-utils";
 import { highlightMentions } from "@/lib/highlight-mentions";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { lazy, Suspense, useState, useRef, useEffect } from "react";
@@ -192,7 +192,10 @@ export function MessageBubble({
             </span>
           )}
 
-          <span className="text-[10px] text-muted-foreground/40 shrink-0">
+          <span
+            className="text-[10px] text-muted-foreground/40 shrink-0 cursor-default"
+            title={formatFullTimestamp(message.created_at)}
+          >
             {time}
           </span>
           {message.is_pinned && (
@@ -275,7 +278,10 @@ export function MessageBubble({
 
       {/* Hover timestamp (when sender line is hidden) */}
       {!showSender && (
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/40">
+        <span
+          className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/40 cursor-default"
+          title={formatFullTimestamp(message.created_at)}
+        >
           {time}
           {message.edited_at && (
             <span className="ml-1 italic">(edited)</span>

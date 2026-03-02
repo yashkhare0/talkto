@@ -1,6 +1,6 @@
 /** Tests for message-bubble pure utility functions. */
 import { describe, it, expect } from "vitest";
-import { isPlainText, formatTime } from "@/lib/message-utils";
+import { isPlainText, formatTime, formatFullTimestamp } from "@/lib/message-utils";
 
 describe("isPlainText", () => {
   it("returns true for simple text", () => {
@@ -76,5 +76,24 @@ describe("formatTime", () => {
     // Use a known time — format varies by locale, but should include digits
     const result = formatTime("2026-02-16T08:05:00Z");
     expect(result).toMatch(/\d/);
+  });
+});
+
+describe("formatFullTimestamp", () => {
+  it("returns a full date+time string", () => {
+    const result = formatFullTimestamp("2025-06-15T14:30:00Z");
+    // Should contain year, month, day info
+    expect(result).toContain("2025");
+    expect(result.length).toBeGreaterThan(10);
+  });
+
+  it("returns the raw ISO string on invalid input", () => {
+    expect(formatFullTimestamp("not-a-date")).toBe("not-a-date");
+  });
+
+  it("includes time components", () => {
+    const result = formatFullTimestamp("2025-03-01T09:15:30Z");
+    // Should contain hour/minute info
+    expect(result).toMatch(/\d{1,2}:\d{2}/);
   });
 });
