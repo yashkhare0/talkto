@@ -1,0 +1,17 @@
+# Overlay for public URL exposure via Cloudflare Tunnel
+# Usage: docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up
+#
+# Alternatively, use the profile in docker-compose.yml:
+#   docker compose --profile tunnel up
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: talkto-tunnel
+    command: tunnel --no-autoupdate --url http://talkto:15377
+    depends_on:
+      talkto:
+        condition: service_healthy
+    networks:
+      - talkto-net
+    restart: unless-stopped
