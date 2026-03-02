@@ -56,6 +56,7 @@ interface AppState {
 
   // ── Typing indicators (from WebSocket) ──
   typingAgents: Map<string, Set<string>>; // channelId → Set<agent_name>
+  typingTimers: Map<string, ReturnType<typeof setTimeout>>; // "channelId:agentName" → timer
   setAgentTyping: (channelId: string, agentName: string, isTyping: boolean, error?: string) => void;
 
   // ── Streaming text (from agent_streaming WebSocket events) ──
@@ -124,14 +125,30 @@ export const useAppStore = create<AppState>((set) => ({
       return { agentStatuses: next };
     }),
 
-  // Typing indicators
+  // Typing indicators (with 30s auto-clear timeout)
   typingAgents: new Map(),
+  typingTimers: new Map(),
   setAgentTyping: (channelId, agentName, isTyping, error?) =>
     set((s) => {
       const next = new Map(s.typingAgents);
       const agents = new Set(next.get(channelId) ?? []);
+      const timerKey = `${channelId}:${agentName}`;
+      const nextTimers = new Map(s.typingTimers);
+
+      // Clear any existing timeout for this agent
+      const existingTimer = nextTimers.get(timerKey);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        nextTimers.delete(timerKey);
+      }
+
       if (isTyping) {
         agents.add(agentName);
+        // Auto-clear after 30 seconds to prevent stuck indicators
+        const timer = setTimeout(() => {
+          useAppStore.getState().setAgentTyping(channelId, agentName, false);
+        }, 30_000);
+        nextTimers.set(timerKey, timer);
       } else {
         agents.delete(agentName);
       }
@@ -142,6 +159,7 @@ export const useAppStore = create<AppState>((set) => ({
       }
       return {
         typingAgents: next,
+        typingTimers: nextTimers,
         invocationError: error ? { channelId, message: error } : s.invocationError,
       };
     }),

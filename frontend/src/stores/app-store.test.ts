@@ -1,5 +1,5 @@
 /** Tests for the Zustand app store. */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useAppStore } from "./app-store";
 
 // Reset store between tests
@@ -11,6 +11,7 @@ beforeEach(() => {
     realtimeMessages: [],
     agentStatuses: new Map(),
     typingAgents: new Map(),
+    typingTimers: new Map(),
     streamingMessages: new Map(),
     invocationError: null,
     wsConnected: false,
@@ -248,6 +249,34 @@ describe("app-store", () => {
     it("setWsConnected updates the state", () => {
       useAppStore.getState().setWsConnected(true);
       expect(useAppStore.getState().wsConnected).toBe(true);
+    });
+  });
+
+  describe("typing timeout", () => {
+    it("sets a timer when agent starts typing", () => {
+      vi.useFakeTimers();
+      useAppStore.getState().setAgentTyping("ch1", "bot1", true);
+      expect(useAppStore.getState().typingAgents.get("ch1")?.has("bot1")).toBe(true);
+      expect(useAppStore.getState().typingTimers.has("ch1:bot1")).toBe(true);
+      vi.useRealTimers();
+    });
+
+    it("auto-clears typing after 30 seconds", () => {
+      vi.useFakeTimers();
+      useAppStore.getState().setAgentTyping("ch1", "bot1", true);
+      expect(useAppStore.getState().typingAgents.get("ch1")?.has("bot1")).toBe(true);
+
+      vi.advanceTimersByTime(30_000);
+      expect(useAppStore.getState().typingAgents.get("ch1")?.has("bot1") ?? false).toBe(false);
+      vi.useRealTimers();
+    });
+
+    it("clears timer when agent stops typing manually", () => {
+      vi.useFakeTimers();
+      useAppStore.getState().setAgentTyping("ch1", "bot1", true);
+      useAppStore.getState().setAgentTyping("ch1", "bot1", false);
+      expect(useAppStore.getState().typingTimers.has("ch1:bot1")).toBe(false);
+      vi.useRealTimers();
     });
   });
 });
