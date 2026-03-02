@@ -1,6 +1,7 @@
 services:
   talkto:
     build: .
+    container_name: talkto-server
     ports:
       - "${TALKTO_PORT:-15377}:15377"
     volumes:
@@ -9,6 +10,7 @@ services:
     environment:
       - TALKTO_HOST=0.0.0.0
       - TALKTO_PORT=15377
+      - TALKTO_DATA_DIR=/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "bun", "-e", "const r = await fetch('http://127.0.0.1:15377/api/channels'); process.exit(r.ok ? 0 : 1)"]
@@ -16,6 +18,27 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 3
+    networks:
+      - talkto-net
+
+  # Optional: Cloudflare Tunnel for public URL sharing
+  # Usage: docker compose --profile tunnel up
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: talkto-tunnel
+    command: tunnel --no-autoupdate --url http://talkto:15377
+    depends_on:
+      talkto:
+        condition: service_healthy
+    profiles:
+      - tunnel
+    networks:
+      - talkto-net
+    restart: unless-stopped
+
+networks:
+  talkto-net:
+    driver: bridge
 
 volumes:
   talkto-data:
