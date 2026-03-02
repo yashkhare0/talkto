@@ -14,6 +14,7 @@ beforeEach(() => {
     streamingMessages: new Map(),
     invocationError: null,
     wsConnected: false,
+    starredChannels: new Set(),
   });
 });
 
@@ -248,6 +249,30 @@ describe("app-store", () => {
     it("setWsConnected updates the state", () => {
       useAppStore.getState().setWsConnected(true);
       expect(useAppStore.getState().wsConnected).toBe(true);
+    });
+  });
+
+  describe("starred channels", () => {
+    it("defaults to empty set", () => {
+      expect(useAppStore.getState().starredChannels.size).toBe(0);
+    });
+
+    it("toggleStarredChannel adds a channel", () => {
+      useAppStore.getState().toggleStarredChannel("ch-1");
+      expect(useAppStore.getState().starredChannels.has("ch-1")).toBe(true);
+    });
+
+    it("toggleStarredChannel removes a starred channel", () => {
+      useAppStore.getState().toggleStarredChannel("ch-2");
+      expect(useAppStore.getState().starredChannels.has("ch-2")).toBe(true);
+      useAppStore.getState().toggleStarredChannel("ch-2");
+      expect(useAppStore.getState().starredChannels.has("ch-2")).toBe(false);
+    });
+
+    it("supports multiple starred channels", () => {
+      useAppStore.getState().toggleStarredChannel("ch-a");
+      useAppStore.getState().toggleStarredChannel("ch-b");
+      expect(useAppStore.getState().starredChannels.size).toBe(2);
     });
   });
 });
